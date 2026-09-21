@@ -1,6 +1,16 @@
+import sys
+import subprocess
+
+def install_and_import(package):
+    try:
+        __import__(package)
+    except ImportError:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
+
+install_and_import('pygame')
+
 import pygame
 import random
-import sys
 import math
 
 pygame.init()
