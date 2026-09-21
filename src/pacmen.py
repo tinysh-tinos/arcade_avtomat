@@ -13,6 +13,7 @@ import pygame
 import random
 import os
 import json
+import math
 
 def save_score(score):
     path = os.environ.get("ARCADE_SCORE_FILE")
@@ -28,228 +29,373 @@ pygame.init()
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Mortal Kombat")
+pygame.display.set_caption("Pac-Man")
 clock = pygame.time.Clock()
 
-BG_TOP = (30, 10, 40)
-BG_BOTTOM = (80, 20, 20)
-GROUND_H = int(HEIGHT * 0.15)
-GROUND_COLOR = (40, 30, 25)
-GROUND_LINE = (70, 50, 40)
+BG_COLOR = (8, 8, 20)
+WALL_COLOR = (30, 60, 200)
+PELLET_COLOR = (255, 220, 180)
+POWER_COLOR = (255, 180, 60)
+PAC_COLOR = (255, 220, 40)
+GHOST_RED = (255, 60, 60)
+GHOST_PINK = (255, 150, 200)
+GHOST_CYAN = (100, 220, 240)
+GHOST_ORANGE = (255, 160, 60)
+GHOST_FRIGHT = (60, 80, 255)
+GHOST_FRIGHT_FLASH = (230, 230, 255)
+EYE_WHITE = (255, 255, 255)
+EYE_BLUE = (40, 80, 220)
+TEXT_COLOR = (230, 240, 255)
 
-P1_COLOR = (60, 140, 255)
-P2_COLOR = (255, 80, 80)
-FIRE_P1 = (100, 200, 255)
-FIRE_P2 = (255, 140, 60)
-HEALTH_GREEN = (60, 220, 80)
-HEALTH_RED = (230, 50, 50)
-HEALTH_BG = (40, 20, 20)
-TEXT_COLOR = (255, 255, 255)
+MAZE = [
+    "############################",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#o####.#####.##.#####.####o#",
+    "#.####.#####.##.#####.####.#",
+    "#..........................#",
+    "#.####.##.########.##.####.#",
+    "#.####.##.########.##.####.#",
+    "#......##....##....##......#",
+    "######.#####.##.#####.######",
+    "     #.#####.##.#####.#     ",
+    "     #.##          ##.#     ",
+    "     #.## ###--### ##.#     ",
+    "######.## #      # ##.######",
+    "      .   #      #   .      ",
+    "######.## #      # ##.######",
+    "     #.## ######## ##.#     ",
+    "     #.##          ##.#     ",
+    "     #.## ######## ##.#     ",
+    "######.## ######## ##.######",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#.####.#####.##.#####.####.#",
+    "#o..##.......##.......##..o#",
+    "###.##.##.########.##.##.###",
+    "###.##.##.########.##.##.###",
+    "#......##....##....##......#",
+    "#.##########.##.##########.#",
+    "#.##########.##.##########.#",
+    "#..........................#",
+    "############################",
+]
 
-font_big = pygame.font.SysFont("Impact", int(HEIGHT * 0.1))
-font_med = pygame.font.SysFont("Impact", int(HEIGHT * 0.055))
-font_small = pygame.font.SysFont("Arial", int(HEIGHT * 0.03))
+ROWS = len(MAZE)
+COLS = len(MAZE[0])
+CELL = min((WIDTH - 100) // COLS, (HEIGHT - 160) // ROWS)
+BOARD_W = COLS * CELL
+BOARD_H = ROWS * CELL
+BOARD_X = (WIDTH - BOARD_W) // 2
+BOARD_Y = (HEIGHT - BOARD_H) // 2 + 30
 
-GRAVITY = HEIGHT * 2.8
-JUMP_POWER = -HEIGHT * 1.05
-MOVE_SPEED = WIDTH * 0.26
-FIREBALL_SPEED = WIDTH * 0.6
-FIREBALL_DAMAGE = 10
+PAC_RADIUS = CELL // 2 - 3
+PAC_SPEED = 3.2 * CELL
+GHOST_SPEED = 2.6 * CELL
+GHOST_FRIGHT_SPEED = 1.6 * CELL
 
-GROUND_Y = HEIGHT - GROUND_H
-
-FIGHTER_W = int(WIDTH * 0.05)
-FIGHTER_H = int(HEIGHT * 0.17)
-FIREBALL_RADIUS = int(HEIGHT * 0.02)
-HEAD_RADIUS = int(HEIGHT * 0.038)
+font_big = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.08), bold=True)
+font_med = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.04), bold=True)
+font_small = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.028))
 
 score = 0
 best = 0
 
 
-def make_background():
-    bg = pygame.Surface((WIDTH, HEIGHT))
-    for y in range(HEIGHT):
-        t = y / HEIGHT
-        r = int(BG_TOP[0] * (1 - t) + BG_BOTTOM[0] * t)
-        g = int(BG_TOP[1] * (1 - t) + BG_BOTTOM[1] * t)
-        b = int(BG_TOP[2] * (1 - t) + BG_BOTTOM[2] * t)
-        pygame.draw.line(bg, (r, g, b), (0, y), (WIDTH, y))
-
-    moon_r = int(HEIGHT * 0.17)
-    pygame.draw.circle(bg, (180, 100, 60), (WIDTH // 2, int(HEIGHT * 0.22)), moon_r)
-    pygame.draw.circle(bg, (220, 140, 80), (WIDTH // 2, int(HEIGHT * 0.22)), int(moon_r * 0.75))
-
-    pygame.draw.rect(bg, GROUND_COLOR, (0, GROUND_Y, WIDTH, GROUND_H))
-    step = int(WIDTH * 0.05)
-    for x in range(-step, WIDTH + step, step):
-        pygame.draw.line(bg, GROUND_LINE, (x, GROUND_Y), (x - step, HEIGHT), 2)
-
-    return bg
+def cell_center(col, row):
+    return (BOARD_X + col * CELL + CELL // 2,
+            BOARD_Y + row * CELL + CELL // 2)
 
 
-BACKGROUND = make_background()
+def is_wall(col, row):
+    if row < 0 or row >= ROWS or col < 0 or col >= COLS:
+        return True
+    return MAZE[row][col] == "#"
 
 
-class Fighter:
-    def __init__(self, x, color, controls, facing):
-        self.x = x
-        self.y = GROUND_Y
-        self.w = FIGHTER_W
-        self.h = FIGHTER_H
-        self.vy = 0
-        self.on_ground = True
-        self.color = color
-        self.controls = controls
-        self.facing = facing
-        self.health = 100
-        self.rect = pygame.Rect(0, 0, self.w, self.h)
-        self.update_rect()
+def make_grid():
+    pellets = set()
+    powers = set()
+    for r, row in enumerate(MAZE):
+        for c, ch in enumerate(row):
+            if ch == ".":
+                pellets.add((c, r))
+            elif ch == "o":
+                powers.add((c, r))
+    return pellets, powers
 
-    def update_rect(self):
-        self.rect = pygame.Rect(
-            int(self.x - self.w // 2),
-            int(self.y - self.h),
-            self.w, self.h
-        )
 
-    def move(self, keys, dt):
-        if keys[self.controls["left"]]:
-            self.x -= MOVE_SPEED * dt
-        if keys[self.controls["right"]]:
-            self.x += MOVE_SPEED * dt
+class Actor:
+    def __init__(self, col, row, speed):
+        self.col = col
+        self.row = row
+        self.x = BOARD_X + col * CELL + CELL // 2
+        self.y = BOARD_Y + row * CELL + CELL // 2
+        self.dir = (0, 0)
+        self.speed = speed
 
-        self.x = max(self.w // 2, min(WIDTH - self.w // 2, self.x))
+    def can_move(self, direction):
+        return not is_wall(self.col + direction[0], self.row + direction[1])
 
-        if keys[self.controls["jump"]] and self.on_ground:
-            self.vy = JUMP_POWER
-            self.on_ground = False
+    def step(self, dt):
+        if self.dir == (0, 0):
+            return
 
-    def apply_gravity(self, dt):
-        self.vy += GRAVITY * dt
-        self.y += self.vy * dt
+        dist = self.speed * dt
 
-        if self.y >= GROUND_Y:
-            self.y = GROUND_Y
-            self.vy = 0
-            self.on_ground = True
-
-    def fire_origin(self):
-        return (self.x + self.facing * self.w // 2, self.y - self.h // 2)
-
-    def draw(self, surface):
-        body_rect = pygame.Rect(
-            int(self.x - self.w // 2),
-            int(self.y - self.h),
-            self.w, self.h
-        )
-        pygame.draw.rect(surface, self.color, body_rect, border_radius=12)
-        pygame.draw.rect(surface, (255, 255, 255), body_rect, 3, border_radius=12)
-
-        head_center = (int(self.x), int(self.y - self.h - HEAD_RADIUS))
-        pygame.draw.circle(surface, (220, 180, 140), head_center, HEAD_RADIUS)
-        pygame.draw.circle(surface, (255, 255, 255), head_center, HEAD_RADIUS, 3)
-
-        eye_dx = int(HEAD_RADIUS * 0.4) * self.facing
-        eye_off = int(HEAD_RADIUS * 0.25)
-        eye_r = max(3, HEAD_RADIUS // 6)
-        pygame.draw.circle(surface, (20, 20, 20),
-                           (head_center[0] + eye_dx, head_center[1] - eye_off), eye_r)
-        pygame.draw.circle(surface, (20, 20, 20),
-                           (head_center[0] + eye_dx - int(HEAD_RADIUS * 0.5),
-                            head_center[1] - eye_off), eye_r)
-
-        arm_y = int(self.y - self.h + self.h * 0.35)
-        arm_len = int(self.w * 0.9)
-        pygame.draw.line(surface, self.color,
-                         (int(self.x), arm_y),
-                         (int(self.x + self.facing * arm_len), arm_y + int(self.h * 0.08)),
-                         max(8, int(self.h * 0.11)))
-
-    def draw_health_bar(self, surface, x, y, bar_w, bar_h, align_right=False):
-        pygame.draw.rect(surface, HEALTH_BG, (x, y, bar_w, bar_h), border_radius=8)
-        pygame.draw.rect(surface, (100, 100, 100), (x, y, bar_w, bar_h), 3, border_radius=8)
-
-        ratio = max(0, self.health) / 100
-        fill_w = int(bar_w * ratio)
-
-        if align_right:
-            fill_rect = (x + bar_w - fill_w, y, fill_w, bar_h)
+        if self.dir[0] > 0:
+            target_x = BOARD_X + (self.col + 1) * CELL + CELL // 2
+            target_y = BOARD_Y + self.row * CELL + CELL // 2
+        elif self.dir[0] < 0:
+            target_x = BOARD_X + (self.col - 1) * CELL + CELL // 2
+            target_y = BOARD_Y + self.row * CELL + CELL // 2
+        elif self.dir[1] > 0:
+            target_x = BOARD_X + self.col * CELL + CELL // 2
+            target_y = BOARD_Y + (self.row + 1) * CELL + CELL // 2
         else:
-            fill_rect = (x, y, fill_w, bar_h)
+            target_x = BOARD_X + self.col * CELL + CELL // 2
+            target_y = BOARD_Y + (self.row - 1) * CELL + CELL // 2
 
-        color = HEALTH_GREEN if ratio > 0.3 else HEALTH_RED
-        if fill_w > 0:
-            pygame.draw.rect(surface, color, fill_rect, border_radius=8)
+        dx = target_x - self.x
+        dy = target_y - self.y
+        length = math.hypot(dx, dy)
+
+        if length <= dist:
+            self.x = target_x
+            self.y = target_y
+            self.col += self.dir[0]
+            self.row += self.dir[1]
+            if not self.can_move(self.dir):
+                self.dir = (0, 0)
+        else:
+            self.x += dx / length * dist
+            self.y += dy / length * dist
+
+    def at_center(self):
+        cx, cy = cell_center(self.col, self.row)
+        return abs(self.x - cx) < 1 and abs(self.y - cy) < 1
 
 
-class Fireball:
-    def __init__(self, x, y, direction, color, owner):
-        self.x = x
-        self.y = y
-        self.dir = direction
-        self.color = color
-        self.owner = owner
-        self.radius = FIREBALL_RADIUS
-        self.alive = True
+class Pac(Actor):
+    def __init__(self):
+        super().__init__(14, 23, PAC_SPEED)
+        self.next_dir = (0, 0)
+        self.mouth = 0
+        self.mouth_dir = 1
 
     def update(self, dt):
-        self.x += self.dir * FIREBALL_SPEED * dt
-        if self.x < -60 or self.x > WIDTH + 60:
-            self.alive = False
+        if self.next_dir == (-self.dir[0], -self.dir[1]) and self.dir != (0, 0):
+            self.dir = self.next_dir
+            self.next_dir = (0, 0)
 
-    def rect(self):
-        return pygame.Rect(
-            int(self.x - self.radius),
-            int(self.y - self.radius),
-            self.radius * 2, self.radius * 2
-        )
+        if self.at_center():
+            if self.next_dir != (0, 0) and self.can_move(self.next_dir):
+                self.dir = self.next_dir
+                self.next_dir = (0, 0)
+
+        self.step(dt)
+
+        if self.dir != (0, 0):
+            self.mouth += self.mouth_dir * dt * 8
+            if self.mouth > 1:
+                self.mouth = 1
+                self.mouth_dir = -1
+            elif self.mouth < 0:
+                self.mouth = 0
+                self.mouth_dir = 1
 
     def draw(self, surface):
-        pygame.draw.circle(surface, (255, 200, 100),
-                           (int(self.x), int(self.y)), int(self.radius * 1.4))
-        pygame.draw.circle(surface, self.color,
-                           (int(self.x), int(self.y)), self.radius)
-        pygame.draw.circle(surface, (255, 255, 255),
-                           (int(self.x), int(self.y)), max(2, self.radius // 2))
+        if self.dir == (1, 0):
+            angle = 0
+        elif self.dir == (-1, 0):
+            angle = 180
+        elif self.dir == (0, -1):
+            angle = 90
+        elif self.dir == (0, 1):
+            angle = 270
+        else:
+            angle = 0
+
+        open_angle = self.mouth * 35
+
+        points = [(self.x, self.y)]
+        steps = 24
+        start = math.radians(open_angle)
+        end = math.radians(360 - open_angle)
+        for i in range(steps + 1):
+            a = start + (end - start) * i / steps
+            points.append((
+                self.x + math.cos(a) * PAC_RADIUS,
+                self.y + math.sin(a) * PAC_RADIUS
+            ))
+
+        rad = math.radians(angle)
+        rotated = []
+        for px, py in points:
+            dx = px - self.x
+            dy = py - self.y
+            rx = dx * math.cos(rad) - dy * math.sin(rad)
+            ry = dx * math.sin(rad) + dy * math.cos(rad)
+            rotated.append((self.x + rx, self.y + ry))
+
+        pygame.draw.polygon(surface, PAC_COLOR, rotated)
 
 
-def draw_hud(surface, p1, p2):
-    margin = int(WIDTH * 0.03)
-    bar_w = int(WIDTH * 0.35)
-    bar_h = int(HEIGHT * 0.045)
-    bar_y = int(HEIGHT * 0.04)
+class Ghost(Actor):
+    def __init__(self, col, row, color):
+        super().__init__(col, row, GHOST_SPEED)
+        self.color = color
+        self.frightened = False
+        self.eaten = False
+        self.start_dir_timer = random.uniform(0, 0.3)
 
-    p1.draw_health_bar(surface, margin, bar_y, bar_w, bar_h)
-    p2.draw_health_bar(surface, WIDTH - margin - bar_w, bar_y, bar_w, bar_h, align_right=True)
+    def update(self, dt, pac, fright_timer):
+        if self.eaten:
+            self.speed = GHOST_SPEED * 1.6
+            target = (14, 14)
+        elif self.frightened:
+            self.speed = GHOST_FRIGHT_SPEED
+            target = None
+        else:
+            self.speed = GHOST_SPEED
+            target = (pac.col, pac.row)
 
-    name1 = font_med.render("ИГРОК 1", True, P1_COLOR)
-    name2 = font_med.render("ИГРОК 2", True, P2_COLOR)
-    surface.blit(name1, (margin, bar_y + bar_h + 10))
-    surface.blit(name2, (WIDTH - margin - name2.get_width(), bar_y + bar_h + 10))
+        if self.at_center():
+            options = []
+            for d in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                if not is_wall(self.col + d[0], self.row + d[1]):
+                    options.append(d)
 
-    best_txt = font_small.render(f"Рекорд: {best}", True, (255, 220, 60))
-    surface.blit(best_txt, (WIDTH // 2 - best_txt.get_width() // 2, bar_y + bar_h + 10))
+            opposite = (-self.dir[0], -self.dir[1])
+            if opposite in options and len(options) > 1:
+                options.remove(opposite)
+
+            if self.start_dir_timer > 0:
+                self.start_dir_timer -= dt
+                if self.dir == (0, 0) and options:
+                    self.dir = random.choice(options)
+            elif options:
+                if target is None:
+                    self.dir = random.choice(options)
+                else:
+                    best = options[0]
+                    best_dist = 10 ** 9
+                    for d in options:
+                        nc = self.col + d[0]
+                        nr = self.row + d[1]
+                        dist = (nc - target[0]) ** 2 + (nr - target[1]) ** 2
+                        if dist < best_dist:
+                            best_dist = dist
+                            best = d
+                    self.dir = best
+
+        self.step(dt)
+
+    def draw(self, surface, time_ms):
+        r = PAC_RADIUS
+        body_color = self.color
+
+        if self.eaten:
+            body_color = None
+        elif self.frightened:
+            body_color = GHOST_FRIGHT_FLASH if time_ms % 400 < 200 else GHOST_FRIGHT
+
+        if body_color:
+            pygame.draw.circle(surface, body_color, (int(self.x), int(self.y - 2)), r)
+            rect = pygame.Rect(int(self.x - r), int(self.y - 2), r * 2, r + 4)
+            pygame.draw.rect(surface, body_color, rect)
+
+            wave_y = self.y + r
+            wave_w = (r * 2) / 4
+            points = [(int(self.x - r), int(wave_y))]
+            for i in range(4):
+                x1 = int(self.x - r + i * wave_w + wave_w / 2)
+                x2 = int(self.x - r + (i + 1) * wave_w)
+                points.append((x1, int(wave_y + 5)))
+                points.append((x2, int(wave_y)))
+            points.append((int(self.x + r), int(wave_y)))
+            points.append((int(self.x + r), int(self.y - 2)))
+            points.append((int(self.x - r), int(self.y - 2)))
+            pygame.draw.polygon(surface, body_color, points)
+
+        eye_r = max(3, r // 3)
+        for ex in (-r // 3, r // 3):
+            pygame.draw.circle(surface, EYE_WHITE,
+                               (int(self.x + ex), int(self.y - 4)), eye_r)
+            pygame.draw.circle(surface, EYE_BLUE,
+                               (int(self.x + ex + self.dir[0] * 2),
+                                int(self.y - 4 + self.dir[1] * 2)), max(2, eye_r // 2))
 
 
-def game_over_screen(winner):
+def draw_maze(surface):
+    for r, row in enumerate(MAZE):
+        for c, ch in enumerate(row):
+            if ch == "#":
+                x = BOARD_X + c * CELL
+                y = BOARD_Y + r * CELL
+                rect = pygame.Rect(x + 2, y + 2, CELL - 4, CELL - 4)
+                pygame.draw.rect(surface, WALL_COLOR, rect, border_radius=5)
+
+
+def draw_pellets(surface, pellets, powers, time_ms):
+    pulse = 0.6 + 0.4 * math.sin(time_ms / 200)
+    for c, r in pellets:
+        cx, cy = cell_center(c, r)
+        pygame.draw.circle(surface, PELLET_COLOR, (int(cx), int(cy)), 4)
+    for c, r in powers:
+        cx, cy = cell_center(c, r)
+        rr = int(7 + 3 * pulse)
+        pygame.draw.circle(surface, POWER_COLOR, (int(cx), int(cy)), rr)
+
+
+def draw_hud(surface, lives, fright_timer):
+    s = font_med.render(f"СЧЁТ: {score}", True, TEXT_COLOR)
+    surface.blit(s, (BOARD_X, BOARD_Y - 50))
+
+    b = font_med.render(f"РЕКОРД: {best}", True, (200, 200, 100))
+    surface.blit(b, (BOARD_X + BOARD_W - b.get_width(), BOARD_Y - 50))
+
+    for i in range(lives):
+        cx = BOARD_X + 20 + i * 40
+        cy = BOARD_Y + BOARD_H + 30
+        points = [(cx, cy)]
+        for j in range(20):
+            a = math.radians(35 + (360 - 70) * j / 19)
+            points.append((cx + math.cos(a) * 12, cy + math.sin(a) * 12))
+        pygame.draw.polygon(surface, PAC_COLOR, points)
+
+    if fright_timer > 0:
+        bar_w = 200
+        ratio = max(0, fright_timer / 7.0)
+        pygame.draw.rect(surface, (60, 60, 90),
+                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40, bar_w, 14),
+                         border_radius=7)
+        pygame.draw.rect(surface, GHOST_FRIGHT,
+                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40,
+                          int(bar_w * ratio), 14),
+                         border_radius=7)
+
+
+def game_over_screen(win):
     save_score(score)
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 200))
     screen.blit(overlay, (0, 0))
 
-    text = font_big.render(f"{winner} ПОБЕДИЛ!", True, (255, 220, 60))
-    screen.blit(text, (WIDTH // 2 - text.get_width() // 2,
-                       HEIGHT // 2 - text.get_height()))
+    if win:
+        title = font_big.render("ПОБЕДА!", True, (120, 255, 140))
+    else:
+        title = font_big.render("ИГРА ОКОНЧЕНА", True, (255, 100, 100))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 150))
 
     s = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
-    screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 + 20))
+    screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 - 40))
 
     b = font_med.render(f"Рекорд: {best}", True, (255, 220, 60))
-    screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 80))
+    screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 10))
 
-    hint = font_med.render("R — заново    ESC — выход", True, (220, 220, 220))
-    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 160))
+    hint = font_small.render("R — заново    ESC — выход", True, (180, 200, 220))
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 80))
 
     pygame.display.flip()
 
@@ -270,23 +416,25 @@ def main():
     global score, best
 
     while True:
-        p1 = Fighter(WIDTH * 0.25, P1_COLOR, {
-            "left": pygame.K_a, "right": pygame.K_d,
-            "jump": pygame.K_w, "fire": pygame.K_f
-        }, facing=1)
-
-        p2 = Fighter(WIDTH * 0.75, P2_COLOR, {
-            "left": pygame.K_LEFT, "right": pygame.K_RIGHT,
-            "jump": pygame.K_UP, "fire": pygame.K_RCTRL
-        }, facing=-1)
-
-        fireballs = []
+        pellets, powers = make_grid()
+        pac = Pac()
+        ghosts = [
+            Ghost(14, 14, GHOST_RED),
+            Ghost(13, 14, GHOST_PINK),
+            Ghost(15, 14, GHOST_CYAN),
+            Ghost(16, 14, GHOST_ORANGE),
+        ]
+        score = 0
+        lives = 3
+        fright_timer = 0
+        respawn_timer = 0
         running = True
-        winner = None
+        win = False
 
         while running:
             dt = clock.tick(60) / 1000
             dt = min(dt, 0.05)
+            time_ms = pygame.time.get_ticks()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -298,60 +446,103 @@ def main():
                         save_score(score)
                         pygame.quit()
                         sys.exit()
-                    if event.key == p1.controls["fire"]:
-                        ox, oy = p1.fire_origin()
-                        fireballs.append(Fireball(ox, oy, 1, FIRE_P1, p1))
-                    if event.key == p2.controls["fire"]:
-                        ox, oy = p2.fire_origin()
-                        fireballs.append(Fireball(ox, oy, -1, FIRE_P2, p2))
+                    if event.key == pygame.K_LEFT:
+                        pac.next_dir = (-1, 0)
+                    elif event.key == pygame.K_RIGHT:
+                        pac.next_dir = (1, 0)
+                    elif event.key == pygame.K_UP:
+                        pac.next_dir = (0, -1)
+                    elif event.key == pygame.K_DOWN:
+                        pac.next_dir = (0, 1)
 
-            keys = pygame.key.get_pressed()
-            p1.move(keys, dt)
-            p2.move(keys, dt)
-            p1.apply_gravity(dt)
-            p2.apply_gravity(dt)
-            p1.update_rect()
-            p2.update_rect()
+            if respawn_timer > 0:
+                respawn_timer -= dt
+                screen.fill(BG_COLOR)
+                draw_maze(screen)
+                draw_pellets(screen, pellets, powers, time_ms)
+                draw_hud(screen, lives, fright_timer)
+                msg = font_med.render("Готов?", True, TEXT_COLOR)
+                screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+                pygame.display.flip()
+                continue
 
-            for fb in fireballs:
-                fb.update(dt)
+            if fright_timer > 0:
+                fright_timer -= dt
+                if fright_timer <= 0:
+                    for g in ghosts:
+                        g.frightened = False
 
-            for fb in fireballs:
-                if not fb.alive:
+            pac.update(dt)
+
+            pc = (pac.col, pac.row)
+            if pc in pellets:
+                pellets.discard(pc)
+                score += 10
+                if score > best:
+                    best = score
+            elif pc in powers:
+                powers.discard(pc)
+                score += 50
+                if score > best:
+                    best = score
+                fright_timer = 7.0
+                for g in ghosts:
+                    if not g.eaten:
+                        g.frightened = True
+
+            for g in ghosts:
+                g.update(dt, pac, fright_timer)
+
+                if g.eaten:
+                    gx, gy = cell_center(14, 14)
+                    if abs(g.x - gx) < CELL / 2 and abs(g.y - gy) < CELL / 2:
+                        g.eaten = False
+                        g.frightened = False
+                        g.col, g.row = 14, 14
+                        g.dir = (0, 0)
+                        g.start_dir_timer = 0.2
                     continue
-                for fighter in (p1, p2):
-                    if fighter is fb.owner:
-                        continue
-                    if fb.rect().colliderect(fighter.rect):
-                        fighter.health -= FIREBALL_DAMAGE
-                        score += 5
+
+                dist = math.hypot(g.x - pac.x, g.y - pac.y)
+                if dist < CELL * 0.6:
+                    if g.frightened:
+                        g.eaten = True
+                        g.frightened = False
+                        score += 200
                         if score > best:
                             best = score
-                        fb.alive = False
-                        if fighter.health <= 0:
-                            winner = "ИГРОК 1" if fighter is p2 else "ИГРОК 2"
+                    else:
+                        lives -= 1
+                        if lives <= 0:
                             running = False
+                        else:
+                            pac = Pac()
+                            ghosts = [
+                                Ghost(14, 14, GHOST_RED),
+                                Ghost(13, 14, GHOST_PINK),
+                                Ghost(15, 14, GHOST_CYAN),
+                                Ghost(16, 14, GHOST_ORANGE),
+                            ]
+                            fright_timer = 0
+                            respawn_timer = 1.2
 
-            for i in range(len(fireballs)):
-                for j in range(i + 1, len(fireballs)):
-                    a, b = fireballs[i], fireballs[j]
-                    if a.alive and b.alive and a.owner is not b.owner:
-                        if a.rect().colliderect(b.rect()):
-                            a.alive = False
-                            b.alive = False
+            if not pellets and not powers:
+                win = True
+                running = False
 
-            fireballs = [fb for fb in fireballs if fb.alive]
+            screen.fill(BG_COLOR)
+            draw_maze(screen)
+            draw_pellets(screen, pellets, powers, time_ms)
 
-            screen.blit(BACKGROUND, (0, 0))
-            p1.draw(screen)
-            p2.draw(screen)
-            for fb in fireballs:
-                fb.draw(screen)
-            draw_hud(screen, p1, p2)
+            for g in ghosts:
+                g.draw(screen, time_ms)
+
+            pac.draw(screen)
+            draw_hud(screen, lives, fright_timer)
 
             pygame.display.flip()
 
-        if not game_over_screen(winner):
+        if not game_over_screen(win):
             break
 
 
