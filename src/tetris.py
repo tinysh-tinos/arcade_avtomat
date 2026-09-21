@@ -11,6 +11,18 @@ install_and_import('pygame')
 
 import pygame
 import random
+import os
+import json
+
+def save_score(score):
+    path = os.environ.get("ARCADE_SCORE_FILE")
+    if path:
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"score": score}, f)
+        except OSError:
+            pass
+
 
 pygame.init()
 
@@ -48,15 +60,18 @@ SHAPES = {
 }
 
 COLS, ROWS = 10, 20
-CELL = min((WIDTH - 400) // COLS, (HEIGHT - 80) // ROWS)
+CELL = min(int((WIDTH - 500) / COLS), int((HEIGHT - 100) / ROWS))
 BOARD_W = COLS * CELL
 BOARD_H = ROWS * CELL
-BOARD_X = (WIDTH - BOARD_W) // 2 - 100
+BOARD_X = (WIDTH - BOARD_W) // 2 - 150
 BOARD_Y = (HEIGHT - BOARD_H) // 2
 
-font_big = pygame.font.SysFont("Segoe UI", 64, bold=True)
-font_med = pygame.font.SysFont("Segoe UI", 32, bold=True)
-font_small = pygame.font.SysFont("Segoe UI", 22)
+font_big = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.08), bold=True)
+font_med = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.04), bold=True)
+font_small = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.028))
+
+score = 0
+best = 0
 
 
 def make_background():
@@ -128,7 +143,7 @@ def clear_lines(board):
     return new_rows, cleared
 
 
-def draw_cell(surface, x, y, color, size=CELL, radius=6):
+def draw_cell(surface, x, y, color, size, radius=6):
     rect = pygame.Rect(x, y, size, size)
     pygame.draw.rect(surface, color, rect, border_radius=radius)
     lighter = tuple(min(255, c + 60) for c in color)
@@ -199,7 +214,7 @@ def draw_mini(surface, piece, x, y, cell_size):
                           COLORS[piece.kind], cell_size - 4, radius=5)
 
 
-def draw_panel(surface, score, level, lines, next_piece):
+def draw_panel(surface, level, lines, next_piece):
     panel_x = BOARD_X + BOARD_W + 60
     panel_y = BOARD_Y
     panel_w = 260
@@ -213,6 +228,13 @@ def draw_panel(surface, score, level, lines, next_piece):
     surface.blit(label, (panel_x + 30, y))
     y += 34
     val = font_med.render(str(score), True, TEXT_COLOR)
+    surface.blit(val, (panel_x + 30, y))
+
+    y += 70
+    label = font_small.render("РЕКОРД", True, (160, 180, 200))
+    surface.blit(label, (panel_x + 30, y))
+    y += 34
+    val = font_med.render(str(best), True, (255, 220, 60))
     surface.blit(val, (panel_x + 30, y))
 
     y += 70
@@ -243,7 +265,8 @@ def draw_panel(surface, score, level, lines, next_piece):
         draw_mini(surface, next_piece, panel_x + panel_w // 2, preview_y + 15, CELL - 6)
 
 
-def game_over_screen(score, level, lines):
+def game_over_screen(level, lines):
+    save_score(score)
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 190))
     screen.blit(overlay, (0, 0))
@@ -254,14 +277,17 @@ def game_over_screen(score, level, lines):
     s = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
     screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 - 90))
 
+    b = font_med.render(f"Рекорд: {best}", True, (255, 220, 60))
+    screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 - 40))
+
     l = font_med.render(f"Линии: {lines}", True, TEXT_COLOR)
-    screen.blit(l, (WIDTH // 2 - l.get_width() // 2, HEIGHT // 2 - 40))
+    screen.blit(l, (WIDTH // 2 - l.get_width() // 2, HEIGHT // 2 + 10))
 
     lv = font_med.render(f"Уровень: {level}", True, ACCENT)
-    screen.blit(lv, (WIDTH // 2 - lv.get_width() // 2, HEIGHT // 2 + 10))
+    screen.blit(lv, (WIDTH // 2 - lv.get_width() // 2, HEIGHT // 2 + 60))
 
     hint = font_small.render("R — заново    ESC — выход", True, (180, 200, 220))
-    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 100))
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 140))
 
     pygame.display.flip()
 
@@ -296,11 +322,11 @@ def piece_fits_anywhere(board, piece):
 
 
 def main():
+    global score, best
+
     while True:
         board = new_board()
         bag = []
-        current = None
-        next_piece = None
         score = 0
         lines_cleared = 0
         level = 1
@@ -317,7 +343,6 @@ def main():
 
         next_piece = next_from_bag()
         current = next_from_bag()
-        next_piece = next_from_bag()
 
         running = True
         while running:
@@ -326,10 +351,12 @@ def main():
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    save_score(score)
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
+                        save_score(score)
                         pygame.quit()
                         sys.exit()
 
@@ -362,11 +389,15 @@ def main():
                         while valid(board, current.cells(oy=current.y + 1)):
                             current.y += 1
                             score += 2
+                            if score > best:
+                                best = score
                         lock_piece(board, current)
                         board, cleared = clear_lines(board)
                         if cleared:
                             lines_cleared += cleared
                             score += [0, 100, 300, 500, 800][cleared] * level
+                            if score > best:
+                                best = score
                             level = lines_cleared // 10 + 1
                             drop_interval = max(0.08, 0.6 - (level - 1) * 0.05)
                         current = next_piece
@@ -394,12 +425,16 @@ def main():
                         current.y += 1
                         if soft_drop:
                             score += 1
+                            if score > best:
+                                best = score
                     else:
                         lock_piece(board, current)
                         board, cleared = clear_lines(board)
                         if cleared:
                             lines_cleared += cleared
                             score += [0, 100, 300, 500, 800][cleared] * level
+                            if score > best:
+                                best = score
                             level = lines_cleared // 10 + 1
                             drop_interval = max(0.08, 0.6 - (level - 1) * 0.05)
                         current = next_piece
@@ -416,11 +451,11 @@ def main():
                     ghost_y_draw += 1
 
             draw_board(screen, board, current, ghost_y_draw)
-            draw_panel(screen, score, level, lines_cleared, next_piece)
+            draw_panel(screen, level, lines_cleared, next_piece)
 
             pygame.display.flip()
 
-        if not game_over_screen(score, level, lines_cleared):
+        if not game_over_screen(level, lines_cleared):
             break
 
 
