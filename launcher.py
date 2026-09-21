@@ -9,12 +9,20 @@ def install_and_import(package):
 
 install_and_import('customtkinter')
 import os
+import sys
 import json
+import time
 import sqlite3
 import hashlib
+import threading
+import subprocess
 import customtkinter as ctk
 from tkinter import messagebox
+import tkinter.filedialog as fd
 from datetime import datetime
+
+from gta2_reader import get_stats_if_changed, latest_save
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "arcade.db")
@@ -38,6 +46,23 @@ def init_db():
             user_id INTEGER NOT NULL,
             game TEXT NOT NULL,
             score INTEGER NOT NULL,
+            played_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS gta2_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            save_name TEXT,
+            save_hash TEXT,
+            money INTEGER,
+            district INTEGER,
+            day INTEGER,
+            kills INTEGER,
+            police_kills INTEGER,
+            cars_destroyed INTEGER,
+            missions_done INTEGER,
             played_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
@@ -114,11 +139,94 @@ def get_top_scores(game=None, limit=15):
     return rows
 
 
+def insert_gta2_stats(user_id, stats):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO gta2_stats (
+            user_id, save_name, save_hash, money, district, day,
+            kills, police_kills, cars_destroyed, missions_done, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        user_id,
+        stats.get("name", ""),
+        stats.get("hash", ""),
+        stats.get("money", 0),
+        stats.get("district", 0),
+        stats.get("day", 0),
+        stats.get("kills", 0),
+        stats.get("police_kills", 0),
+        stats.get("cars_destroyed", 0),
+        stats.get("missions_done", 0),
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+    conn.close()
+
+
+def last_gta2_hash(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT save_hash FROM gta2_stats
+        WHERE user_id = ?
+        ORDER BY played_at DESC LIMIT 1
+    """, (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def get_gta2_stats(user_id, limit=50):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT save_name, money, district, day, kills, police_kills,
+               cars_destroyed, missions_done, played_at
+        FROM gta2_stats WHERE user_id = ?
+        ORDER BY played_at DESC LIMIT ?
+    """, (user_id, limit))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+class GTA2Watcher(threading.Thread):
+    def __init__(self, user_id, process, interval=60):
+        super().__init__(daemon=True)
+        self.user_id = user_id
+        self.process = process
+        self.interval = interval
+        self.stop_flag = threading.Event()
+        self.last_hash = last_gta2_hash(user_id)
+
+    def run(self):
+        while not self.stop_flag.is_set():
+            time.sleep(self.interval)
+
+            if self.process.poll() is not None:
+                self.check_once()
+                break
+
+            self.check_once()
+
+    def check_once(self):
+        try:
+            stats, new_hash = get_stats_if_changed(self.last_hash)
+            if stats:
+                insert_gta2_stats(self.user_id, stats)
+                self.last_hash = new_hash
+                print(f"[GTA2] импортирована статистика: {stats['file']}")
+        except Exception as e:
+            print(f"[GTA2] ошибка чтения сейва: {e}")
+
+
 class ArcadeApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.current_user_id = None
         self.current_username = None
+        self.watcher = None
 
         ctk.set_appearance_mode("dark")
         self.attributes("-fullscreen", True)
@@ -299,23 +407,40 @@ class ArcadeApp(ctk.CTk):
                                width=220, height=54, corner_radius=15,
                                font=("Segoe UI", 18),
                                fg_color="#1f538d", hover_color="#14375e")
-        btn_mc.place(relx=0.5, rely=0.62, anchor="center")
+        btn_mc.place(relx=0.42, rely=0.62, anchor="center")
+
+        btn_gta = ctk.CTkButton(self.container, text="GTA 2",
+                                command=self.launch_gta2,
+                                width=220, height=54, corner_radius=15,
+                                font=("Segoe UI", 18),
+                                fg_color="#4a4a4a", hover_color="#333333")
+        btn_gta.place(relx=0.58, rely=0.62, anchor="center")
 
         btn_scores = ctk.CTkButton(self.container, text="Таблица результатов",
                                    command=self.show_scores,
                                    width=220, height=54, corner_radius=15,
                                    font=("Segoe UI", 18),
                                    fg_color="#6f4f1f", hover_color="#4f3a12")
-        btn_scores.place(relx=0.5, rely=0.72, anchor="center")
+        btn_scores.place(relx=0.42, rely=0.72, anchor="center")
+
+        btn_gta_stats = ctk.CTkButton(self.container, text="GTA 2 — статистика",
+                                      command=self.show_gta2_stats,
+                                      width=220, height=54, corner_radius=15,
+                                      font=("Segoe UI", 18),
+                                      fg_color="#6f4f1f", hover_color="#4f3a12")
+        btn_gta_stats.place(relx=0.58, rely=0.72, anchor="center")
 
         btn_logout = ctk.CTkButton(self.container, text="Сменить аккаунт",
                                    command=self.logout,
-                                   width=220, height=44, corner_radius=15,
+                                   width=460, height=44, corner_radius=15,
                                    font=("Segoe UI", 16),
                                    fg_color="#7a1f1f", hover_color="#5a1010")
-        btn_logout.place(relx=0.5, rely=0.81, anchor="center")
+        btn_logout.place(relx=0.5, rely=0.82, anchor="center")
 
     def logout(self):
+        if self.watcher and self.watcher.is_alive():
+            self.watcher.stop_flag.set()
+        self.watcher = None
         self.current_user_id = None
         self.current_username = None
         self.show_login()
@@ -346,8 +471,7 @@ class ArcadeApp(ctk.CTk):
         env["ARCADE_SCORE_FILE"] = score_file
 
         try:
-            import subprocess
-            subprocess.Popen(["python", path], env=env)
+            subprocess.Popen([sys.executable, path], env=env)
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось запустить: {e}")
             return
@@ -370,6 +494,33 @@ class ArcadeApp(ctk.CTk):
                 pass
             return
         self.after(3000, lambda: self.check_score(score_file, game))
+
+    def launch_gta2(self):
+        path = fd.askopenfilename(
+            title="Выберите gta2.exe",
+            filetypes=[("Исполняемые", "*.exe"), ("Все файлы", "*.*")]
+        )
+        if not path:
+            return
+
+        if self.watcher and self.watcher.is_alive():
+            messagebox.showinfo("GTA 2", "Сбор статистики уже запущен")
+            return
+
+        try:
+            process = subprocess.Popen([path], cwd=os.path.dirname(path))
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось запустить GTA 2: {e}")
+            return
+
+        self.watcher = GTA2Watcher(self.current_user_id, process, interval=60)
+        self.watcher.start()
+
+        messagebox.showinfo(
+            "GTA 2",
+            "Игра запущена.\n\nСтатистика будет автоматически "
+            "собираться каждую минуту,\nпока GTA 2 открыта."
+        )
 
     def show_scores(self):
         self.clear()
@@ -447,11 +598,59 @@ class ArcadeApp(ctk.CTk):
                                  fg_color="#1f538d", hover_color="#14375e")
         btn_back.place(relx=0.5, rely=0.94, anchor="center")
 
+    def show_gta2_stats(self):
+        self.clear()
+        self.container.configure(fg_color="#48a3db")
+
+        title = ctk.CTkLabel(self.container, text="GTA 2 — статистика",
+                             font=("Segoe UI", 34, "bold"), text_color="white")
+        title.place(relx=0.5, rely=0.08, anchor="center")
+
+        rows = get_gta2_stats(self.current_user_id, limit=50)
+
+        scroll = ctk.CTkScrollableFrame(
+            self.container,
+            width=int(self.winfo_screenwidth() * 0.85),
+            height=int(self.winfo_screenheight() * 0.65),
+            fg_color="#2a3a4a"
+        )
+        scroll.place(relx=0.5, rely=0.55, anchor="center")
+
+        headers = ["Имя", "Деньги", "Район", "День",
+                   "Убийства", "Полиция", "Машины", "Миссии", "Дата"]
+        header = ctk.CTkFrame(scroll, fg_color="#1f538d", corner_radius=8)
+        header.pack(fill="x", pady=(0, 4))
+        for h in headers:
+            ctk.CTkLabel(header, text=h, width=130,
+                         font=("Segoe UI", 15, "bold")).pack(side="left", padx=4, pady=6)
+
+        if not rows:
+            ctk.CTkLabel(scroll, text="Пока нет данных GTA 2",
+                         font=("Segoe UI", 18)).pack(pady=30)
+
+        for i, row in enumerate(rows):
+            bg = "#34495e" if i % 2 == 0 else "#2c3e50"
+            rf = ctk.CTkFrame(scroll, fg_color=bg, corner_radius=6)
+            rf.pack(fill="x", pady=1)
+            for val in row:
+                ctk.CTkLabel(rf, text=str(val), width=130,
+                             font=("Segoe UI", 14)).pack(side="left", padx=4, pady=5)
+
+        btn_back = ctk.CTkButton(self.container, text="Назад", command=self.show_menu,
+                                 width=220, height=48, corner_radius=15,
+                                 font=("Segoe UI", 18),
+                                 fg_color="#1f538d", hover_color="#14375e")
+        btn_back.place(relx=0.5, rely=0.94, anchor="center")
+
 
 def main():
     init_db()
     app = ArcadeApp()
     app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
