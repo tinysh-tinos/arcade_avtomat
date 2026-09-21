@@ -11,7 +11,20 @@ install_and_import('pygame')
 
 import pygame
 import random
+import os
+import json
 import math
+
+
+def save_score(score):
+    path = os.environ.get("ARCADE_SCORE_FILE")
+    if path:
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"score": score}, f)
+        except OSError:
+            pass
+
 
 pygame.init()
 
@@ -36,17 +49,20 @@ EYE_BLACK = (20, 20, 20)
 TEXT_COLOR = (255, 255, 255)
 TEXT_SHADOW = (40, 40, 40)
 
-font_big = pygame.font.SysFont("Segoe UI", 80, bold=True)
-font_med = pygame.font.SysFont("Segoe UI", 40, bold=True)
-font_small = pygame.font.SysFont("Segoe UI", 26)
+font_big = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.1), bold=True)
+font_med = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.055), bold=True)
+font_small = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.035))
 
-GROUND_H = 120
-GRAVITY = 1800
-FLAP_POWER = -650
-PIPE_WIDTH = 120
-PIPE_GAP = 260
-PIPE_SPEED = 380
+GROUND_H = int(HEIGHT * 0.17)
+GRAVITY = HEIGHT * 2.4
+FLAP_POWER = -HEIGHT * 0.9
+PIPE_WIDTH = int(WIDTH * 0.1)
+PIPE_GAP = int(HEIGHT * 0.36)
+PIPE_SPEED = WIDTH * 0.32
 PIPE_SPAWN = 1.6
+
+score = 0
+best = 0
 
 
 def make_background():
@@ -57,13 +73,11 @@ def make_background():
         g = int(SKY_TOP[1] * (1 - t) + SKY_BOTTOM[1] * t)
         b = int(SKY_TOP[2] * (1 - t) + SKY_BOTTOM[2] * t)
         pygame.draw.line(bg, (r, g, b), (0, y), (WIDTH, y))
-
     for i in range(40):
         x = random.randint(0, WIDTH)
         y = random.randint(0, HEIGHT - GROUND_H - 200)
         r = random.randint(2, 5)
-        pygame.draw.circle(bg, (255, 255, 255, 100), (x, y), r)
-
+        pygame.draw.circle(bg, (255, 255, 255), (x, y), r)
     return bg
 
 
@@ -75,7 +89,7 @@ class Bird:
         self.x = WIDTH // 4
         self.y = HEIGHT // 2
         self.vy = 0
-        self.radius = 28
+        self.radius = int(HEIGHT * 0.045)
         self.angle = 0
         self.wing_phase = 0
 
@@ -109,15 +123,6 @@ class Bird:
 
         pygame.draw.circle(bird_surf, BIRD_DARK, (cx + 2, cy + 2), r)
         pygame.draw.circle(bird_surf, BIRD_BODY, (cx, cy), r)
-
-        # wing_offset = math.sin(self.wing_phase) * 6
-        # wing_points = [
-        #     (cx - r // 2, cy + int(wing_offset)),
-        #     (cx - r // 2 - 18, cy + 12 + int(wing_offset)),
-        #     (cx + r // 2, cy + 14 + int(wing_offset)),
-        # ]
-        # pygame.draw.polygon(bird_surf, BIRD_WING, wing_points)
-        # pygame.draw.polygon(bird_surf, (200, 200, 200), wing_points, 2)
 
         beak_points = [
             (cx + r - 4, cy - 4),
@@ -208,7 +213,7 @@ def draw_ground(surface, offset):
         )
 
 
-def draw_score(surface, score, best):
+def draw_score(surface):
     txt = font_big.render(str(score), True, TEXT_COLOR)
     shadow = font_big.render(str(score), True, TEXT_SHADOW)
     cx = WIDTH // 2
@@ -221,44 +226,8 @@ def draw_score(surface, score, best):
     surface.blit(best_txt, (cx - best_txt.get_width() // 2, 180))
 
 
-def start_screen(best):
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
-                if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
-                    return
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                return
-
-        screen.blit(BACKGROUND, (0, 0))
-
-        title = font_big.render("FLAPPY BIRD", True, TEXT_COLOR)
-        title_sh = font_big.render("FLAPPY BIRD", True, TEXT_SHADOW)
-        screen.blit(title_sh, (WIDTH // 2 - title.get_width() // 2 + 5, 205))
-        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 200))
-
-        hint = font_med.render("ПРОБЕЛ / КЛИК — начать", True, TEXT_COLOR)
-        hint_sh = font_med.render("ПРОБЕЛ / КЛИК — начать", True, TEXT_SHADOW)
-        screen.blit(hint_sh, (WIDTH // 2 - hint.get_width() // 2 + 3, HEIGHT // 2 + 103))
-        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 100))
-
-        best_txt = font_small.render(f"Рекорд: {best}", True, TEXT_COLOR)
-        screen.blit(best_txt, (WIDTH // 2 - best_txt.get_width() // 2, HEIGHT // 2 + 180))
-
-        esc = font_small.render("ESC — выход", True, TEXT_COLOR)
-        screen.blit(esc, (WIDTH // 2 - esc.get_width() // 2, HEIGHT - 60))
-
-        pygame.display.flip()
-        clock.tick(60)
-
-
-def game_over_screen(score, best):
+def game_over_screen():
+    save_score(score)
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 170))
     screen.blit(overlay, (0, 0))
@@ -298,11 +267,9 @@ def game_over_screen(score, best):
 
 
 def main():
-    best = 0
+    global score, best
 
     while True:
-        start_screen(best)
-
         bird = Bird()
         pipes = []
         clouds = [Cloud() for _ in range(6)]
@@ -310,6 +277,7 @@ def main():
         spawn_timer = 0
         ground_offset = 0
         game_started = False
+        died = False
 
         running = True
         while running:
@@ -318,10 +286,12 @@ def main():
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    save_score(score)
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
+                        save_score(score)
                         pygame.quit()
                         sys.exit()
                     if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
@@ -331,7 +301,7 @@ def main():
                     bird.flap()
                     game_started = True
 
-            if game_started:
+            if game_started and not died:
                 bird.update(dt)
                 ground_offset += PIPE_SPEED * dt
 
@@ -355,12 +325,18 @@ def main():
 
                     top, bottom = pipe.rects()
                     if bird.rect().colliderect(top) or bird.rect().colliderect(bottom):
-                        running = False
+                        died = True
 
                 pipes = [p for p in pipes if p.x + PIPE_WIDTH > -10]
 
                 if bird.y + bird.radius >= HEIGHT - GROUND_H:
                     bird.y = HEIGHT - GROUND_H - bird.radius
+                    died = True
+
+                if died:
+                    if score > best:
+                        best = score
+                    save_score(score)
                     running = False
 
             for cloud in clouds:
@@ -376,7 +352,7 @@ def main():
 
             draw_ground(screen, ground_offset)
             bird.draw(screen)
-            draw_score(screen, score, best)
+            draw_score(screen)
 
             if not game_started:
                 hint = font_med.render("ПРОБЕЛ — взлёт", True, TEXT_COLOR)
@@ -386,10 +362,7 @@ def main():
 
             pygame.display.flip()
 
-        if score > best:
-            best = score
-
-        if not game_over_screen(score, best):
+        if not game_over_screen():
             break
 
 
