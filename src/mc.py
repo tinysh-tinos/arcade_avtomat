@@ -15,6 +15,7 @@ import os
 import json
 import math
 
+
 def save_score(score):
     path = os.environ.get("ARCADE_SCORE_FILE")
     if path:
@@ -30,84 +31,33 @@ pygame.joystick.init()
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Pac-Man")
+pygame.display.set_caption("Змейка")
 clock = pygame.time.Clock()
 
-BG_COLOR = (8, 8, 20)
-BG_GLOW_1 = (20, 15, 50)
-BG_GLOW_2 = (10, 20, 45)
-WALL_COLOR = (30, 60, 200)
-WALL_GLOW = (60, 120, 255)
-WALL_EDGE = (120, 180, 255)
-PELLET_COLOR = (255, 220, 180)
-POWER_COLOR = (255, 180, 60)
-PAC_COLOR = (255, 220, 40)
-PAC_GLOW = (255, 200, 100)
-GHOST_RED = (255, 60, 60)
-GHOST_PINK = (255, 150, 200)
-GHOST_CYAN = (100, 220, 240)
-GHOST_ORANGE = (255, 160, 60)
-GHOST_FRIGHT = (60, 80, 255)
-GHOST_FRIGHT_FLASH = (230, 230, 255)
-EYE_WHITE = (255, 255, 255)
-EYE_BLUE = (40, 80, 220)
+CELL = 32
+COLS, ROWS = WIDTH // CELL, HEIGHT // CELL
+
+BG_TOP = (18, 22, 34)
+BG_BOTTOM = (28, 34, 52)
+GRID_COLOR = (38, 44, 64)
+SNAKE_HEAD = (120, 255, 140)
+SNAKE_TAIL = (30, 130, 70)
+FOOD_OUTER = (255, 90, 110)
+FOOD_INNER = (255, 200, 210)
 TEXT_COLOR = (230, 240, 255)
-TEXT_DIM = (150, 170, 200)
-ACCENT = (100, 180, 255)
+TEXT_DIM = (160, 180, 200)
+ACCENT = (120, 255, 140)
 GOLD = (255, 215, 80)
 
-MAZE = [
-    "############################",
-    "#............##............#",
-    "#.####.#####.##.#####.####.#",
-    "#o####.#####.##.#####.####o#",
-    "#.####.#####.##.#####.####.#",
-    "#..........................#",
-    "#.####.##.########.##.####.#",
-    "#.####.##.########.##.####.#",
-    "#......##....##....##......#",
-    "######.#####.##.#####.######",
-    "     #.#####.##.#####.#     ",
-    "     #.##          ##.#     ",
-    "     #.## ###--### ##.#     ",
-    "######.## #      # ##.######",
-    "      .   #      #   .      ",
-    "######.## #      # ##.######",
-    "     #.## ######## ##.#     ",
-    "     #.##          ##.#     ",
-    "     #.## ######## ##.#     ",
-    "######.## ######## ##.######",
-    "#............##............#",
-    "#.####.#####.##.#####.####.#",
-    "#.####.#####.##.#####.####.#",
-    "#o..##.......##.......##..o#",
-    "###.##.##.########.##.##.###",
-    "###.##.##.########.##.##.###",
-    "#......##....##....##......#",
-    "#.##########.##.##########.#",
-    "#.##########.##.##########.#",
-    "#..........................#",
-    "############################",
-]
+font_big = pygame.font.SysFont("Segoe UI", 64, bold=True)
+font_med = pygame.font.SysFont("Segoe UI", 32, bold=True)
+font_small = pygame.font.SysFont("Segoe UI", 22)
 
-ROWS = len(MAZE)
-COLS = len(MAZE[0])
-CELL = min((WIDTH - 100) // COLS, (HEIGHT - 160) // ROWS)
-BOARD_W = COLS * CELL
-BOARD_H = ROWS * CELL
-BOARD_X = (WIDTH - BOARD_W) // 2
-BOARD_Y = (HEIGHT - BOARD_H) // 2 + 30
-
-PAC_RADIUS = CELL // 2 - 3
-PAC_SPEED = 3.2 * CELL
-GHOST_SPEED = 2.6 * CELL
-GHOST_FRIGHT_SPEED = 1.6 * CELL
-
-font_big = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.08), bold=True)
-font_med = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.04), bold=True)
-font_small = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.028))
-
+snake = []
+direction = (1, 0)
+food = (0, 0)
 score = 0
+speed = 8
 best = 0
 
 # ---------- Настройки джойстиков ----------
@@ -131,48 +81,64 @@ def init_joysticks():
     print(f"Найдено джойстиков: {len(joysticks)}")
 
 
-# ---------- Фон с мягким свечением ----------
 def make_background():
-    surf = pygame.Surface((WIDTH, HEIGHT))
-    surf.fill(BG_COLOR)
-    # Мягкие радиальные градиенты
-    for cx, cy, color in [
-        (WIDTH * 0.25, HEIGHT * 0.3, BG_GLOW_1),
-        (WIDTH * 0.75, HEIGHT * 0.7, BG_GLOW_2),
-    ]:
-        for r in range(int(WIDTH * 0.4), 0, -int(WIDTH * 0.02)):
-            t = r / (WIDTH * 0.4)
-            a = int(40 * (1 - t))
-            s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(s, (*color, a), (r, r), r)
-            surf.blit(s, (cx - r, cy - r))
-    return surf
+    bg = pygame.Surface((WIDTH, HEIGHT))
+    for y in range(HEIGHT):
+        t = y / HEIGHT
+        r = int(BG_TOP[0] * (1 - t) + BG_BOTTOM[0] * t)
+        g = int(BG_TOP[1] * (1 - t) + BG_BOTTOM[1] * t)
+        b = int(BG_TOP[2] * (1 - t) + BG_BOTTOM[2] * t)
+        pygame.draw.line(bg, (r, g, b), (0, y), (WIDTH, y))
+    for x in range(0, WIDTH, CELL):
+        pygame.draw.line(bg, GRID_COLOR, (x, 0), (x, HEIGHT), 1)
+    for y in range(0, HEIGHT, CELL):
+        pygame.draw.line(bg, GRID_COLOR, (0, y), (WIDTH, y), 1)
+    return bg
 
 
 BACKGROUND = make_background()
 
 
-def cell_center(col, row):
-    return (BOARD_X + col * CELL + CELL // 2,
-            BOARD_Y + row * CELL + CELL // 2)
+def lerp_color(c1, c2, t):
+    return (
+        int(c1[0] + (c2[0] - c1[0]) * t),
+        int(c1[1] + (c2[1] - c1[1]) * t),
+        int(c1[2] + (c2[2] - c1[2]) * t),
+    )
 
 
-def is_wall(col, row):
-    if row < 0 or row >= ROWS or col < 0 or col >= COLS:
-        return True
-    return MAZE[row][col] == "#"
+def draw_rounded_cell(surface, color, x, y, size, radius=8):
+    rect = pygame.Rect(x, y, size, size)
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
 
 
-def make_grid():
-    pellets = set()
-    powers = set()
-    for r, row in enumerate(MAZE):
-        for c, ch in enumerate(row):
-            if ch == ".":
-                pellets.add((c, r))
-            elif ch == "o":
-                powers.add((c, r))
-    return pellets, powers
+def draw_eye(surface, cx, cy, direction):
+    dx, dy = direction
+    offset = 6
+    r = 4
+    if dx != 0:
+        ex = cx + dx * offset
+        ey1 = cy - offset
+        ey2 = cy + offset
+        pygame.draw.circle(surface, (20, 30, 20), (ex, ey1), r)
+        pygame.draw.circle(surface, (20, 30, 20), (ex, ey2), r)
+        pygame.draw.circle(surface, (255, 255, 255), (ex + dx, ey1 - 1), 2)
+        pygame.draw.circle(surface, (255, 255, 255), (ex + dx, ey2 - 1), 2)
+    else:
+        ey = cy + dy * offset
+        ex1 = cx - offset
+        ex2 = cx + offset
+        pygame.draw.circle(surface, (20, 30, 20), (ex1, ey), r)
+        pygame.draw.circle(surface, (20, 30, 20), (ex2, ey), r)
+        pygame.draw.circle(surface, (255, 255, 255), (ex1 - 1, ey + dy), 2)
+        pygame.draw.circle(surface, (255, 255, 255), (ex2 - 1, ey + dy), 2)
+
+
+def spawn_food():
+    while True:
+        pos = (random.randint(0, COLS - 1), random.randint(0, ROWS - 1))
+        if pos not in snake:
+            return pos
 
 
 class Particle:
@@ -204,336 +170,82 @@ class Particle:
 particles = []
 
 
-def spawn_particles(x, y, color, count=8):
+def spawn_particles(x, y, color, count=14):
     for _ in range(count):
         a = random.uniform(0, math.tau)
-        spd = random.uniform(CELL * 1.5, CELL * 4.5)
+        spd = random.uniform(80, 320)
         particles.append(Particle(
             x, y,
             math.cos(a) * spd, math.sin(a) * spd,
             color,
-            random.uniform(0.2, 0.5),
-            random.randint(2, 4),
+            random.uniform(0.25, 0.6),
+            random.randint(2, 5),
         ))
 
 
-def draw_glow(surface, x, y, radius, color, alpha=120):
-    s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-    for i in range(6, 0, -1):
-        r = int(radius * i / 6)
-        a = int(alpha * (i / 6) * 0.4)
-        pygame.draw.circle(s, (*color, a), (radius, radius), r)
-    surface.blit(s, (x - radius, y - radius))
+def draw_snake(surface, time_ms):
+    n = len(snake)
+    for i, (x, y) in enumerate(snake):
+        t = i / max(n - 1, 1)
+        color = lerp_color(SNAKE_HEAD, SNAKE_TAIL, t)
+        px = x * CELL + 2
+        py = y * CELL + 2
+        size = CELL - 4
+        if i == 0:
+            pulse = int(2 * math.sin(time_ms / 200))
+            glow = pygame.Surface((size + 16 + pulse * 2, size + 16 + pulse * 2),
+                                  pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*SNAKE_HEAD, 60), glow.get_rect(),
+                             border_radius=14)
+            surface.blit(glow, (px - 8 - pulse, py - 8 - pulse))
+        draw_rounded_cell(surface, color, px, py, size, radius=8)
+    hx, hy = snake[0]
+    cx = hx * CELL + CELL // 2
+    cy = hy * CELL + CELL // 2
+    draw_eye(surface, cx, cy, direction)
 
 
-class Actor:
-    def __init__(self, col, row, speed):
-        self.col = col
-        self.row = row
-        self.x = BOARD_X + col * CELL + CELL // 2
-        self.y = BOARD_Y + row * CELL + CELL // 2
-        self.dir = (0, 0)
-        self.speed = speed
-
-    def can_move(self, direction):
-        return not is_wall(self.col + direction[0], self.row + direction[1])
-
-    def step(self, dt):
-        if self.dir == (0, 0):
-            return
-
-        dist = self.speed * dt
-
-        if self.dir[0] > 0:
-            target_x = BOARD_X + (self.col + 1) * CELL + CELL // 2
-            target_y = BOARD_Y + self.row * CELL + CELL // 2
-        elif self.dir[0] < 0:
-            target_x = BOARD_X + (self.col - 1) * CELL + CELL // 2
-            target_y = BOARD_Y + self.row * CELL + CELL // 2
-        elif self.dir[1] > 0:
-            target_x = BOARD_X + self.col * CELL + CELL // 2
-            target_y = BOARD_Y + (self.row + 1) * CELL + CELL // 2
-        else:
-            target_x = BOARD_X + self.col * CELL + CELL // 2
-            target_y = BOARD_Y + (self.row - 1) * CELL + CELL // 2
-
-        dx = target_x - self.x
-        dy = target_y - self.y
-        length = math.hypot(dx, dy)
-
-        if length <= dist:
-            self.x = target_x
-            self.y = target_y
-            self.col += self.dir[0]
-            self.row += self.dir[1]
-            if not self.can_move(self.dir):
-                self.dir = (0, 0)
-        else:
-            self.x += dx / length * dist
-            self.y += dy / length * dist
-
-    def at_center(self):
-        cx, cy = cell_center(self.col, self.row)
-        return abs(self.x - cx) < 1 and abs(self.y - cy) < 1
+def draw_food(surface, time_ms):
+    fx, fy = food
+    cx = fx * CELL + CELL // 2
+    cy = fy * CELL + CELL // 2
+    pulse = 2 * math.sin(time_ms / 150)
+    r_outer = CELL // 2 - 4 + pulse
+    r_inner = r_outer // 2
+    glow = pygame.Surface((CELL * 2, CELL * 2), pygame.SRCALPHA)
+    pygame.draw.circle(glow, (*FOOD_OUTER, 60), (CELL, CELL), int(r_outer + 8))
+    surface.blit(glow, (cx - CELL, cy - CELL))
+    pygame.draw.circle(surface, FOOD_OUTER, (cx, cy), int(r_outer))
+    pygame.draw.circle(surface, FOOD_INNER, (cx - 3, cy - 3), int(r_inner))
 
 
-class Pac(Actor):
-    def __init__(self):
-        super().__init__(14, 23, PAC_SPEED)
-        self.next_dir = (0, 0)
-        self.mouth = 0
-        self.mouth_dir = 1
-
-    def update(self, dt):
-        if self.next_dir == (-self.dir[0], -self.dir[1]) and self.dir != (0, 0):
-            self.dir = self.next_dir
-            self.next_dir = (0, 0)
-
-        if self.at_center():
-            if self.next_dir != (0, 0) and self.can_move(self.next_dir):
-                self.dir = self.next_dir
-                self.next_dir = (0, 0)
-
-        self.step(dt)
-
-        if self.dir != (0, 0):
-            self.mouth += self.mouth_dir * dt * 8
-            if self.mouth > 1:
-                self.mouth = 1
-                self.mouth_dir = -1
-            elif self.mouth < 0:
-                self.mouth = 0
-                self.mouth_dir = 1
-
-    def draw(self, surface, time_ms):
-        if self.dir == (1, 0):
-            angle = 0
-        elif self.dir == (-1, 0):
-            angle = 180
-        elif self.dir == (0, -1):
-            angle = 90
-        elif self.dir == (0, 1):
-            angle = 270
-        else:
-            angle = 0
-
-        # Свечение под Pac-Man
-        pulse = 0.7 + 0.3 * math.sin(time_ms / 150)
-        draw_glow(surface, self.x, self.y, int(PAC_RADIUS * 1.6),
-                  PAC_GLOW, int(80 * pulse))
-
-        # Тень
-        shadow = pygame.Surface((PAC_RADIUS * 2, PAC_RADIUS), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 120), shadow.get_rect())
-        surface.blit(shadow, (self.x - PAC_RADIUS, self.y + PAC_RADIUS - 4))
-
-        open_angle = self.mouth * 35
-
-        points = [(self.x, self.y)]
-        steps = 24
-        start = math.radians(open_angle)
-        end = math.radians(360 - open_angle)
-        for i in range(steps + 1):
-            a = start + (end - start) * i / steps
-            points.append((
-                self.x + math.cos(a) * PAC_RADIUS,
-                self.y + math.sin(a) * PAC_RADIUS
-            ))
-
-        rad = math.radians(angle)
-        rotated = []
-        for px, py in points:
-            dx = px - self.x
-            dy = py - self.y
-            rx = dx * math.cos(rad) - dy * math.sin(rad)
-            ry = dx * math.sin(rad) + dy * math.cos(rad)
-            rotated.append((self.x + rx, self.y + ry))
-
-        pygame.draw.polygon(surface, PAC_COLOR, rotated)
-        # Блик
-        pygame.draw.circle(surface, (255, 255, 200),
-                           (int(self.x - PAC_RADIUS * 0.3),
-                            int(self.y - PAC_RADIUS * 0.4)),
-                           max(2, PAC_RADIUS // 5))
-
-
-class Ghost(Actor):
-    def __init__(self, col, row, color):
-        super().__init__(col, row, GHOST_SPEED)
-        self.color = color
-        self.frightened = False
-        self.eaten = False
-        self.start_dir_timer = random.uniform(0, 0.3)
-        self.wobble = random.uniform(0, 10)
-
-    def update(self, dt, pac, fright_timer):
-        if self.eaten:
-            self.speed = GHOST_SPEED * 1.6
-            target = (14, 14)
-        elif self.frightened:
-            self.speed = GHOST_FRIGHT_SPEED
-            target = None
-        else:
-            self.speed = GHOST_SPEED
-            target = (pac.col, pac.row)
-
-        if self.at_center():
-            options = []
-            for d in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                if not is_wall(self.col + d[0], self.row + d[1]):
-                    options.append(d)
-
-            opposite = (-self.dir[0], -self.dir[1])
-            if opposite in options and len(options) > 1:
-                options.remove(opposite)
-
-            if self.start_dir_timer > 0:
-                self.start_dir_timer -= dt
-                if self.dir == (0, 0) and options:
-                    self.dir = random.choice(options)
-            elif options:
-                if target is None:
-                    self.dir = random.choice(options)
-                else:
-                    best = options[0]
-                    best_dist = 10 ** 9
-                    for d in options:
-                        nc = self.col + d[0]
-                        nr = self.row + d[1]
-                        dist = (nc - target[0]) ** 2 + (nr - target[1]) ** 2
-                        if dist < best_dist:
-                            best_dist = dist
-                            best = d
-                    self.dir = best
-
-        self.step(dt)
-        self.wobble += dt * 6
-
-    def draw(self, surface, time_ms):
-        r = PAC_RADIUS
-        body_color = self.color
-
-        if self.eaten:
-            body_color = None
-        elif self.frightened:
-            body_color = GHOST_FRIGHT_FLASH if time_ms % 400 < 200 else GHOST_FRIGHT
-
-        # Свечение
-        if body_color:
-            draw_glow(surface, self.x, self.y, int(r * 1.4), body_color, 60)
-
-        # Тень
-        shadow = pygame.Surface((r * 2, r), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 120), shadow.get_rect())
-        surface.blit(shadow, (self.x - r, self.y + r - 4))
-
-        # Покачивание
-        wob = math.sin(self.wobble) * 1.5
-
-        if body_color:
-            pygame.draw.circle(surface, body_color,
-                               (int(self.x), int(self.y - 2 + wob)), r)
-            rect = pygame.Rect(int(self.x - r), int(self.y - 2 + wob),
-                               r * 2, r + 4)
-            pygame.draw.rect(surface, body_color, rect)
-
-            wave_y = self.y + r + wob
-            wave_w = (r * 2) / 4
-            points = [(int(self.x - r), int(wave_y))]
-            for i in range(4):
-                x1 = int(self.x - r + i * wave_w + wave_w / 2)
-                x2 = int(self.x - r + (i + 1) * wave_w)
-                points.append((x1, int(wave_y + 5)))
-                points.append((x2, int(wave_y)))
-            points.append((int(self.x + r), int(wave_y)))
-            points.append((int(self.x + r), int(self.y - 2 + wob)))
-            points.append((int(self.x - r), int(self.y - 2 + wob)))
-            pygame.draw.polygon(surface, body_color, points)
-
-        # Глаза
-        eye_r = max(3, r // 3)
-        for ex in (-r // 3, r // 3):
-            pygame.draw.circle(surface, EYE_WHITE,
-                               (int(self.x + ex), int(self.y - 4 + wob)), eye_r)
-            pygame.draw.circle(surface, EYE_BLUE,
-                               (int(self.x + ex + self.dir[0] * 2),
-                                int(self.y - 4 + self.dir[1] * 2 + wob)),
-                               max(2, eye_r // 2))
-
-
-def draw_maze(surface, time_ms):
-    pulse = 0.6 + 0.4 * math.sin(time_ms / 700)
-    for r, row in enumerate(MAZE):
-        for c, ch in enumerate(row):
-            if ch == "#":
-                x = BOARD_X + c * CELL
-                y = BOARD_Y + r * CELL
-                rect = pygame.Rect(x + 2, y + 2, CELL - 4, CELL - 4)
-                # Свечение стены
-                draw_glow(surface, rect.centerx, rect.centery,
-                          int(CELL * 0.7), WALL_GLOW, int(30 * pulse))
-                pygame.draw.rect(surface, WALL_COLOR, rect, border_radius=5)
-                # Внутренняя обводка
-                pygame.draw.rect(surface, WALL_EDGE, rect, 1, border_radius=5)
-
-
-def draw_pellets(surface, pellets, powers, time_ms):
-    pulse = 0.6 + 0.4 * math.sin(time_ms / 200)
-    for c, r in pellets:
-        cx, cy = cell_center(c, r)
-        # Лёгкое свечение
-        draw_glow(surface, cx, cy, 10, PELLET_COLOR, 60)
-        pygame.draw.circle(surface, PELLET_COLOR, (int(cx), int(cy)), 4)
-    for c, r in powers:
-        cx, cy = cell_center(c, r)
-        rr = int(7 + 3 * pulse)
-        draw_glow(surface, cx, cy, rr * 3, POWER_COLOR, 120)
-        pygame.draw.circle(surface, POWER_COLOR, (int(cx), int(cy)), rr)
-        pygame.draw.circle(surface, (255, 255, 200),
-                           (int(cx), int(cy)), max(2, rr // 2))
-
-
-def draw_hud(surface, lives, fright_timer):
-    s = font_med.render(f"СЧЁТ: {score}", True, TEXT_COLOR)
-    surface.blit(s, (BOARD_X, BOARD_Y - 50))
-
-    b = font_med.render(f"РЕКОРД: {best}", True, GOLD)
-    surface.blit(b, (BOARD_X + BOARD_W - b.get_width(), BOARD_Y - 50))
-
-    for i in range(lives):
-        cx = BOARD_X + 20 + i * 40
-        cy = BOARD_Y + BOARD_H + 30
-        points = [(cx, cy)]
-        for j in range(20):
-            a = math.radians(35 + (360 - 70) * j / 19)
-            points.append((cx + math.cos(a) * 12, cy + math.sin(a) * 12))
-        pygame.draw.polygon(surface, PAC_COLOR, points)
-
-    if fright_timer > 0:
-        bar_w = 200
-        ratio = max(0, fright_timer / 7.0)
-        pygame.draw.rect(surface, (60, 60, 90),
-                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40,
-                          bar_w, 14), border_radius=7)
-        pygame.draw.rect(surface, GHOST_FRIGHT,
-                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40,
-                          int(bar_w * ratio), 14), border_radius=7)
+def draw_hud(surface):
+    panel = pygame.Surface((280, 120), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (0, 0, 0, 120), panel.get_rect(), border_radius=18)
+    pygame.draw.rect(panel, (*ACCENT, 180), panel.get_rect(), 2, border_radius=18)
+    surface.blit(panel, (30, 30))
+    s1 = font_small.render("СЧЁТ", True, TEXT_DIM)
+    s2 = font_med.render(str(score), True, TEXT_COLOR)
+    s3 = font_small.render(f"Рекорд: {best}", True, GOLD)
+    surface.blit(s1, (55, 45))
+    surface.blit(s2, (55, 68))
+    surface.blit(s3, (55, 108))
 
 
 # ============================================================
 #           ВВОД: клавиатура + джойстик
 # ============================================================
 def read_direction(keys, joy):
-    """Возвращает направление от клавиатуры/джойстика или None."""
+    """Возвращает новое направление от клавиатуры/джойстика или None."""
     # --- Клавиатура ---
-    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        return (-1, 0)
-    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        return (1, 0)
     if keys[pygame.K_UP] or keys[pygame.K_w]:
         return (0, -1)
     if keys[pygame.K_DOWN] or keys[pygame.K_s]:
         return (0, 1)
+    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        return (-1, 0)
+    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        return (1, 0)
 
     # --- Джойстик ---
     if joy is None:
@@ -557,6 +269,7 @@ def read_direction(keys, joy):
                 return (1, 0) if ax > 0 else (-1, 0)
             else:
                 return (0, 1) if ay > 0 else (0, -1)
+
     return None
 
 
@@ -569,6 +282,61 @@ def button_pressed(joy, idx):
 # ============================================================
 #                       ЭКРАНЫ
 # ============================================================
+def start_screen():
+    t = 0.0
+    while True:
+        dt = clock.tick(60) / 1000
+        t += dt
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                if event.key in (pygame.K_SPACE, pygame.K_RETURN):
+                    return
+            if event.type == pygame.JOYBUTTONDOWN:
+                if event.button == BTN_START or event.button == BTN_BACK:
+                    pygame.quit()
+                    sys.exit()
+                if event.button in (BTN_A, BTN_X):
+                    return
+            if event.type in (pygame.JOYDEVICEADDED, pygame.JOYDEVICEREMOVED):
+                init_joysticks()
+
+        screen.blit(BACKGROUND, (0, 0))
+
+        # Пульсирующий заголовок
+        pulse = 0.5 + 0.5 * math.sin(t * 2)
+        title = font_big.render("ЗМЕЙКА", True, ACCENT)
+        shadow = font_big.render("ЗМЕЙКА", True, (0, 0, 0))
+        tx = WIDTH // 2 - title.get_width() // 2
+        ty = HEIGHT // 2 - 180 + int(math.sin(t * 1.5) * 6)
+        screen.blit(shadow, (tx + 4, ty + 4))
+        screen.blit(title, (tx, ty))
+
+        sub = font_med.render("Стрелки / WASD / Джойстик", True, TEXT_COLOR)
+        screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT // 2 - 40))
+
+        hint1 = font_med.render("SPACE / A — начать", True, GOLD)
+        screen.blit(hint1, (WIDTH // 2 - hint1.get_width() // 2, HEIGHT // 2 + 60))
+
+        hint2 = font_small.render("P — пауза    Q / ESC — выход", True, TEXT_DIM)
+        screen.blit(hint2, (WIDTH // 2 - hint2.get_width() // 2, HEIGHT // 2 + 130))
+
+        jinfo = font_small.render(f"Джойстиков: {len(joysticks)}", True, TEXT_DIM)
+        screen.blit(jinfo, (WIDTH // 2 - jinfo.get_width() // 2, HEIGHT - 80))
+
+        if int(t * 2) % 2 == 0:
+            blink = font_small.render("●", True, ACCENT)
+            screen.blit(blink, (WIDTH // 2 - blink.get_width() // 2, HEIGHT // 2 + 105))
+
+        pygame.display.flip()
+
+
 def pause_screen():
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
@@ -597,35 +365,27 @@ def pause_screen():
                 if event.key in (pygame.K_p, pygame.K_RETURN, pygame.K_SPACE):
                     return
             if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == BTN_START or event.button == BTN_BACK:
-                    return
-                if event.button in (BTN_A, BTN_X):
+                if event.button in (BTN_START, BTN_BACK, BTN_A, BTN_X):
                     return
         clock.tick(30)
 
 
-def game_over_screen(win):
+def game_over():
     save_score(score)
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 200))
+    overlay.fill((0, 0, 0, 180))
     screen.blit(overlay, (0, 0))
 
-    if win:
-        title = font_big.render("ПОБЕДА!", True, (120, 255, 140))
-    else:
-        title = font_big.render("ИГРА ОКОНЧЕНА", True, (255, 100, 100))
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 150))
-
-    s = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
-    screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 - 40))
-
-    b = font_med.render(f"Рекорд: {best}", True, GOLD)
-    screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 10))
-
-    hint = font_small.render("A / R — заново    START / ESC — выход",
+    title = font_big.render("ИГРА ОКОНЧЕНА", True, FOOD_OUTER)
+    score_txt = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
+    best_txt = font_med.render(f"Рекорд: {best}", True, GOLD)
+    hint = font_small.render("A / R — заново    START / Q / ESC — выход",
                              True, TEXT_DIM)
-    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 80))
 
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 180))
+    screen.blit(score_txt, (WIDTH // 2 - score_txt.get_width() // 2, HEIGHT // 2 - 60))
+    screen.blit(best_txt, (WIDTH // 2 - best_txt.get_width() // 2, HEIGHT // 2))
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 100))
     pygame.display.flip()
 
     while True:
@@ -634,175 +394,141 @@ def game_over_screen(win):
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+                if event.key in (pygame.K_q, pygame.K_ESCAPE):
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_r:
                     return True
             if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == BTN_START or event.button == BTN_BACK:
+                if event.button in (BTN_START, BTN_BACK):
                     pygame.quit()
                     sys.exit()
                 if event.button == BTN_A:
                     return True
 
 
+def reset_game():
+    global snake, direction, food, score, speed
+    snake = [(COLS // 4, ROWS // 2),
+             (COLS // 4 - 1, ROWS // 2),
+             (COLS // 4 - 2, ROWS // 2)]
+    direction = (1, 0)
+    food = spawn_food()
+    score = 0
+    speed = 8
+
+
 def main():
-    global score, best
+    global direction, food, score, speed, best
 
     init_joysticks()
     joy = joysticks[0] if joysticks else None
 
-    while True:
-        pellets, powers = make_grid()
-        pac = Pac()
-        ghosts = [
-            Ghost(14, 14, GHOST_RED),
-            Ghost(13, 14, GHOST_PINK),
-            Ghost(15, 14, GHOST_CYAN),
-            Ghost(16, 14, GHOST_ORANGE),
-        ]
-        score = 0
-        lives = 3
-        fright_timer = 0
-        respawn_timer = 0
-        running = True
-        win = False
+    start_screen()
 
-        particles.clear()
+    reset_game()
 
-        while running:
-            dt = clock.tick(60) / 1000
-            dt = min(dt, 0.05)
-            time_ms = pygame.time.get_ticks()
+    # Очередь поворотов (буфер до 2), чтобы быстрые нажатия не терялись
+    turn_queue = []
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
+    running = True
+    timer = 0
+    while running:
+        dt = clock.tick(60)
+        time_ms = pygame.time.get_ticks()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                save_score(score)
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
                     save_score(score)
                     pygame.quit()
                     sys.exit()
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        save_score(score)
-                        pygame.quit()
-                        sys.exit()
-                    if event.key in (pygame.K_p, pygame.K_RETURN):
-                        pause_screen()
-                if event.type == pygame.JOYBUTTONDOWN:
-                    if event.button == BTN_START or event.button == BTN_BACK:
-                        pause_screen()
-                if event.type in (pygame.JOYDEVICEADDED,
-                                  pygame.JOYDEVICEREMOVED):
-                    init_joysticks()
-                    joy = joysticks[0] if joysticks else None
+                if event.key in (pygame.K_p, pygame.K_RETURN):
+                    pause_screen()
+                    timer = 0
+            if event.type == pygame.JOYBUTTONDOWN:
+                if event.button in (BTN_START, BTN_BACK):
+                    pause_screen()
+                    timer = 0
+            if event.type in (pygame.JOYDEVICEADDED, pygame.JOYDEVICEREMOVED):
+                init_joysticks()
+                joy = joysticks[0] if joysticks else None
 
-            if respawn_timer > 0:
-                respawn_timer -= dt
-                screen.blit(BACKGROUND, (0, 0))
-                draw_maze(screen, time_ms)
-                draw_pellets(screen, pellets, powers, time_ms)
-                draw_hud(screen, lives, fright_timer)
-                msg = font_med.render("Готов?", True, TEXT_COLOR)
-                screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
-                pygame.display.flip()
-                continue
+        # --- Ввод направления ---
+        keys = pygame.key.get_pressed()
+        new_dir = read_direction(keys, joy)
+        if new_dir is not None:
+            # Не даём развернуться на 180°
+            if (new_dir[0] != -direction[0] or new_dir[1] != -direction[1]):
+                # Заменяем конец очереди на новое нажатие
+                if not turn_queue or turn_queue[-1] != new_dir:
+                    turn_queue.append(new_dir)
+                    if len(turn_queue) > 2:
+                        turn_queue.pop(0)
 
-            # --- Ввод ---
-            keys = pygame.key.get_pressed()
-            new_dir = read_direction(keys, joy)
-            if new_dir is not None:
-                pac.next_dir = new_dir
+        timer += dt
+        step_delay = 1000 / speed
+        if timer >= step_delay:
+            timer = 0
 
-            if fright_timer > 0:
-                fright_timer -= dt
-                if fright_timer <= 0:
-                    for g in ghosts:
-                        g.frightened = False
+            # Применяем поворот из очереди
+            while turn_queue:
+                cand = turn_queue.pop(0)
+                if cand[0] != -direction[0] or cand[1] != -direction[1]:
+                    direction = cand
+                    break
 
-            pac.update(dt)
+            head_x, head_y = snake[0]
+            new_head = (head_x + direction[0], head_y + direction[1])
 
-            pc = (pac.col, pac.row)
-            if pc in pellets:
-                pellets.discard(pc)
-                score += 10
+            # Столкновение со стеной или собой
+            if not (0 <= new_head[0] < COLS and 0 <= new_head[1] < ROWS) or \
+               new_head in snake:
                 if score > best:
                     best = score
-                cx, cy = cell_center(*pc)
-                spawn_particles(cx, cy, PELLET_COLOR, 6)
-            elif pc in powers:
-                powers.discard(pc)
-                score += 50
-                if score > best:
-                    best = score
-                cx, cy = cell_center(*pc)
-                spawn_particles(cx, cy, POWER_COLOR, 16)
-                fright_timer = 7.0
-                for g in ghosts:
-                    if not g.eaten:
-                        g.frightened = True
-
-            for g in ghosts:
-                g.update(dt, pac, fright_timer)
-
-                if g.eaten:
-                    gx, gy = cell_center(14, 14)
-                    if abs(g.x - gx) < CELL / 2 and abs(g.y - gy) < CELL / 2:
-                        g.eaten = False
-                        g.frightened = False
-                        g.col, g.row = 14, 14
-                        g.dir = (0, 0)
-                        g.start_dir_timer = 0.2
+                # Частицы на месте смерти
+                cx = head_x * CELL + CELL // 2
+                cy = head_y * CELL + CELL // 2
+                spawn_particles(cx, cy, FOOD_OUTER, 30)
+                if game_over():
+                    reset_game()
+                    turn_queue.clear()
+                    timer = 0
+                    particles.clear()
                     continue
+                else:
+                    return
 
-                dist = math.hypot(g.x - pac.x, g.y - pac.y)
-                if dist < CELL * 0.6:
-                    if g.frightened:
-                        g.eaten = True
-                        g.frightened = False
-                        score += 200
-                        if score > best:
-                            best = score
-                        spawn_particles(g.x, g.y, (150, 220, 255), 14)
-                    else:
-                        lives -= 1
-                        spawn_particles(pac.x, pac.y, PAC_COLOR, 20)
-                        if lives <= 0:
-                            running = False
-                        else:
-                            pac = Pac()
-                            ghosts = [
-                                Ghost(14, 14, GHOST_RED),
-                                Ghost(13, 14, GHOST_PINK),
-                                Ghost(15, 14, GHOST_CYAN),
-                                Ghost(16, 14, GHOST_ORANGE),
-                            ]
-                            fright_timer = 0
-                            respawn_timer = 1.2
+            snake.insert(0, new_head)
 
-            if not pellets and not powers:
-                win = True
-                running = False
+            if new_head == food:
+                score += 1
+                # Частицы на месте еды
+                fx, fy = food
+                spawn_particles(fx * CELL + CELL // 2,
+                                fy * CELL + CELL // 2,
+                                FOOD_OUTER, 16)
+                food = spawn_food()
+                if speed < 22:
+                    speed += 0.4
+            else:
+                snake.pop()
 
-            # --- Отрисовка ---
-            screen.blit(BACKGROUND, (0, 0))
-            draw_maze(screen, time_ms)
-            draw_pellets(screen, pellets, powers, time_ms)
+        # --- Отрисовка ---
+        screen.blit(BACKGROUND, (0, 0))
+        draw_food(screen, time_ms)
+        draw_snake(screen, time_ms)
 
-            for p in particles:
-                p.draw(screen)
+        for p in particles:
+            p.draw(screen)
+        particles[:] = [p for p in particles if p.update(dt / 1000)]
 
-            for g in ghosts:
-                g.draw(screen, time_ms)
-
-            pac.draw(screen, time_ms)
-            draw_hud(screen, lives, fright_timer)
-
-            particles[:] = [p for p in particles if p.update(dt)]
-
-            pygame.display.flip()
-
-        if not game_over_screen(win):
-            break
+        draw_hud(screen)
+        pygame.display.flip()
 
 
 if __name__ == "__main__":
