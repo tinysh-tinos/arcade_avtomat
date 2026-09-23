@@ -1,5 +1,7 @@
 import sys
 import subprocess
+import math
+import random
 
 def install_and_import(package):
     try:
@@ -10,11 +12,8 @@ def install_and_import(package):
 install_and_import('pygame')
 
 import pygame
-import random
 import os
 import json
-import math
-
 
 def save_score(score):
     path = os.environ.get("ARCADE_SCORE_FILE")
@@ -31,41 +30,67 @@ pygame.joystick.init()
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Змейка")
+pygame.display.set_caption("Mortal Kombat")
 clock = pygame.time.Clock()
 
-CELL = 32
-COLS, ROWS = WIDTH // CELL, HEIGHT // CELL
+# ---------- Палитра ----------
+SKY_TOP    = (12, 8, 28)
+SKY_MID    = (48, 18, 62)
+SKY_BOT    = (120, 40, 50)
+SUN_COLOR  = (255, 180, 90)
+SUN_GLOW   = (255, 120, 60)
+MOUNTAIN_1 = (28, 16, 40)
+MOUNTAIN_2 = (18, 10, 28)
+TEMPLE_COL = (35, 22, 35)
+TEMPLE_DARK= (22, 14, 24)
+GROUND_COL = (58, 40, 34)
+GROUND_LT  = (82, 58, 48)
+GROUND_DK  = (34, 22, 20)
 
-BG_TOP = (18, 22, 34)
-BG_BOTTOM = (28, 34, 52)
-GRID_COLOR = (38, 44, 64)
-SNAKE_HEAD = (120, 255, 140)
-SNAKE_TAIL = (30, 130, 70)
-FOOD_OUTER = (255, 90, 110)
-FOOD_INNER = (255, 200, 210)
-TEXT_COLOR = (230, 240, 255)
-TEXT_DIM = (160, 180, 200)
-ACCENT = (120, 255, 140)
-GOLD = (255, 215, 80)
+P1_COLOR   = (70, 150, 255)
+P1_DARK    = (30, 80, 170)
+P2_COLOR   = (255, 90, 90)
+P2_DARK    = (160, 40, 50)
+SKIN       = (230, 190, 150)
+SKIN_DARK  = (190, 150, 115)
+FIRE_P1    = (120, 210, 255)
+FIRE_P2    = (255, 150, 60)
 
-font_big = pygame.font.SysFont("Segoe UI", 64, bold=True)
-font_med = pygame.font.SysFont("Segoe UI", 32, bold=True)
-font_small = pygame.font.SysFont("Segoe UI", 22)
+HEALTH_GREEN = (70, 230, 90)
+HEALTH_YEL   = (240, 200, 60)
+HEALTH_RED   = (230, 50, 50)
+HEALTH_BG    = (30, 16, 20)
+HEALTH_GHOST = (240, 200, 60)
+TEXT_COLOR   = (255, 255, 255)
+GOLD         = (255, 215, 80)
 
-snake = []
-direction = (1, 0)
-food = (0, 0)
+font_big   = pygame.font.SysFont("Impact", int(HEIGHT * 0.11))
+font_med   = pygame.font.SysFont("Impact", int(HEIGHT * 0.055))
+font_small = pygame.font.SysFont("Arial", int(HEIGHT * 0.028))
+font_dmg   = pygame.font.SysFont("Impact", int(HEIGHT * 0.035))
+
+GRAVITY         = HEIGHT * 2.8
+JUMP_POWER      = -HEIGHT * 1.05
+MOVE_SPEED      = WIDTH * 0.26
+FIREBALL_SPEED  = WIDTH * 0.65
+FIREBALL_DAMAGE = 10
+ROUND_TIME      = 60
+
+GROUND_H = int(HEIGHT * 0.16)
+GROUND_Y = HEIGHT - GROUND_H
+
+FIGHTER_W = int(WIDTH * 0.05)
+FIGHTER_H = int(HEIGHT * 0.17)
+FIREBALL_RADIUS = int(HEIGHT * 0.022)
+HEAD_RADIUS     = int(HEIGHT * 0.038)
+
 score = 0
-speed = 8
-best = 0
+best  = 0
 
-# ---------- Настройки джойстиков ----------
 DEADZONE = 0.4
-BTN_A = 0        # A / Cross
-BTN_X = 2        # X / Square
-BTN_START = 7    # Start / Options
-BTN_BACK = 6     # Back / Select
+BTN_JUMP  = 0
+BTN_FIRE  = 2
+BTN_START = 7
 
 joysticks = []
 
@@ -78,69 +103,125 @@ def init_joysticks():
         j = pygame.joystick.Joystick(i)
         j.init()
         joysticks.append(j)
-    print(f"Найдено джойстиков: {len(joysticks)}")
 
 
+# ============================================================
+#                       ФОН
+# ============================================================
 def make_background():
     bg = pygame.Surface((WIDTH, HEIGHT))
-    for y in range(HEIGHT):
-        t = y / HEIGHT
-        r = int(BG_TOP[0] * (1 - t) + BG_BOTTOM[0] * t)
-        g = int(BG_TOP[1] * (1 - t) + BG_BOTTOM[1] * t)
-        b = int(BG_TOP[2] * (1 - t) + BG_BOTTOM[2] * t)
+
+    # --- Небо: трёхцветный градиент ---
+    for y in range(GROUND_Y):
+        t = y / GROUND_Y
+        if t < 0.5:
+            k = t / 0.5
+            r = int(SKY_TOP[0] * (1 - k) + SKY_MID[0] * k)
+            g = int(SKY_TOP[1] * (1 - k) + SKY_MID[1] * k)
+            b = int(SKY_TOP[2] * (1 - k) + SKY_MID[2] * k)
+        else:
+            k = (t - 0.5) / 0.5
+            r = int(SKY_MID[0] * (1 - k) + SKY_BOT[0] * k)
+            g = int(SKY_MID[1] * (1 - k) + SKY_BOT[1] * k)
+            b = int(SKY_MID[2] * (1 - k) + SKY_BOT[2] * k)
         pygame.draw.line(bg, (r, g, b), (0, y), (WIDTH, y))
-    for x in range(0, WIDTH, CELL):
-        pygame.draw.line(bg, GRID_COLOR, (x, 0), (x, HEIGHT), 1)
-    for y in range(0, HEIGHT, CELL):
-        pygame.draw.line(bg, GRID_COLOR, (0, y), (WIDTH, y), 1)
+
+    # --- Звёзды в верхней части ---
+    random.seed(42)
+    for _ in range(160):
+        sx = random.randint(0, WIDTH)
+        sy = random.randint(0, int(GROUND_Y * 0.55))
+        brightness = random.randint(120, 255)
+        size = random.choice([1, 1, 1, 2])
+        pygame.draw.circle(bg, (brightness, brightness, brightness), (sx, sy), size)
+    random.seed()
+
+    # --- Солнце с сиянием ---
+    sun_x = int(WIDTH * 0.72)
+    sun_y = int(GROUND_Y * 0.55)
+    sun_r = int(HEIGHT * 0.13)
+    for i in range(12, 0, -1):
+        radius = sun_r + i * int(HEIGHT * 0.012)
+        alpha = int(60 * (1 - i / 12))
+        glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*SUN_GLOW, alpha), (radius, radius), radius)
+        bg.blit(glow, (sun_x - radius, sun_y - radius))
+    pygame.draw.circle(bg, SUN_COLOR, (sun_x, sun_y), sun_r)
+    pygame.draw.circle(bg, (255, 220, 160), (sun_x, sun_y), int(sun_r * 0.75))
+
+    # --- Дальние горы ---
+    def draw_mountains(color, base_y, height_scale, seed, points_count=14):
+        random.seed(seed)
+        pts = [(0, GROUND_Y)]
+        for i in range(points_count + 1):
+            x = int(WIDTH * i / points_count)
+            y = base_y - random.randint(0, int(HEIGHT * height_scale))
+            pts.append((x, y))
+        pts.append((WIDTH, GROUND_Y))
+        pygame.draw.polygon(bg, color, pts)
+        random.seed()
+
+    draw_mountains(MOUNTAIN_2, int(GROUND_Y * 1.0), 0.20, 1, 12)
+    draw_mountains(MOUNTAIN_1, int(GROUND_Y * 1.0), 0.14, 2, 16)
+
+    # --- Пагода / храм вдалеке ---
+    def draw_pagoda(cx, base_y, w, h):
+        # основание
+        pygame.draw.rect(bg, TEMPLE_COL, (cx - w, base_y - h, w * 2, h))
+        # крыши (три уровня)
+        for level in range(3):
+            ly = base_y - h + int(h * level * 0.3)
+            lw = int(w * (1.4 - level * 0.15))
+            lh = int(h * 0.12)
+            # трапеция крыши
+            pygame.draw.polygon(bg, TEMPLE_DARK, [
+                (cx - lw, ly + lh),
+                (cx + lw, ly + lh),
+                (cx + int(lw * 0.7), ly),
+                (cx - int(lw * 0.7), ly),
+            ])
+        # шпиль
+        pygame.draw.polygon(bg, TEMPLE_DARK, [
+            (cx - 6, base_y - h - int(h * 0.05)),
+            (cx + 6, base_y - h - int(h * 0.05)),
+            (cx, base_y - h - int(h * 0.15)),
+        ])
+
+    draw_pagoda(int(WIDTH * 0.18), GROUND_Y + 10, int(WIDTH * 0.055), int(HEIGHT * 0.22))
+    draw_pagoda(int(WIDTH * 0.82), GROUND_Y + 10, int(WIDTH * 0.045), int(HEIGHT * 0.18))
+
+    # --- Земля (арена) ---
+    pygame.draw.rect(bg, GROUND_COL, (0, GROUND_Y, WIDTH, GROUND_H))
+    # Верхняя кромка
+    pygame.draw.rect(bg, GROUND_LT, (0, GROUND_Y, WIDTH, int(HEIGHT * 0.008)))
+    # Текстура — пятна песка
+    random.seed(7)
+    for _ in range(400):
+        x = random.randint(0, WIDTH)
+        y = random.randint(GROUND_Y + 10, HEIGHT - 2)
+        r = random.randint(2, 7)
+        shade = random.randint(-15, 15)
+        col = (
+            max(0, min(255, GROUND_COL[0] + shade)),
+            max(0, min(255, GROUND_COL[1] + shade)),
+            max(0, min(255, GROUND_COL[2] + shade)),
+        )
+        pygame.draw.circle(bg, col, (x, y), r)
+    random.seed()
+    # Линии перспективы
+    for i in range(1, 14):
+        y = GROUND_Y + int(GROUND_H * (i / 14) ** 1.6)
+        pygame.draw.line(bg, GROUND_DK, (0, y), (WIDTH, y), 1)
+
     return bg
 
 
 BACKGROUND = make_background()
 
 
-def lerp_color(c1, c2, t):
-    return (
-        int(c1[0] + (c2[0] - c1[0]) * t),
-        int(c1[1] + (c2[1] - c1[1]) * t),
-        int(c1[2] + (c2[2] - c1[2]) * t),
-    )
-
-
-def draw_rounded_cell(surface, color, x, y, size, radius=8):
-    rect = pygame.Rect(x, y, size, size)
-    pygame.draw.rect(surface, color, rect, border_radius=radius)
-
-
-def draw_eye(surface, cx, cy, direction):
-    dx, dy = direction
-    offset = 6
-    r = 4
-    if dx != 0:
-        ex = cx + dx * offset
-        ey1 = cy - offset
-        ey2 = cy + offset
-        pygame.draw.circle(surface, (20, 30, 20), (ex, ey1), r)
-        pygame.draw.circle(surface, (20, 30, 20), (ex, ey2), r)
-        pygame.draw.circle(surface, (255, 255, 255), (ex + dx, ey1 - 1), 2)
-        pygame.draw.circle(surface, (255, 255, 255), (ex + dx, ey2 - 1), 2)
-    else:
-        ey = cy + dy * offset
-        ex1 = cx - offset
-        ex2 = cx + offset
-        pygame.draw.circle(surface, (20, 30, 20), (ex1, ey), r)
-        pygame.draw.circle(surface, (20, 30, 20), (ex2, ey), r)
-        pygame.draw.circle(surface, (255, 255, 255), (ex1 - 1, ey + dy), 2)
-        pygame.draw.circle(surface, (255, 255, 255), (ex2 - 1, ey + dy), 2)
-
-
-def spawn_food():
-    while True:
-        pos = (random.randint(0, COLS - 1), random.randint(0, ROWS - 1))
-        if pos not in snake:
-            return pos
-
-
+# ============================================================
+#                     ЭФФЕКТЫ
+# ============================================================
 class Particle:
     def __init__(self, x, y, vx, vy, color, life, size):
         self.x, self.y = x, y
@@ -153,8 +234,7 @@ class Particle:
     def update(self, dt):
         self.x += self.vx * dt
         self.y += self.vy * dt
-        self.vx *= 0.94
-        self.vy *= 0.94
+        self.vy += HEIGHT * 1.2 * dt
         self.life -= dt
         return self.life > 0
 
@@ -167,122 +247,417 @@ class Particle:
         surf.blit(s, (int(self.x - r), int(self.y - r)))
 
 
+class DamageText:
+    def __init__(self, x, y, text, color):
+        self.x, self.y = x, y
+        self.text = text
+        self.color = color
+        self.life = 0.9
+        self.max_life = 0.9
+
+    def update(self, dt):
+        self.y -= HEIGHT * 0.12 * dt
+        self.life -= dt
+        return self.life > 0
+
+    def draw(self, surf):
+        t = max(0, self.life / self.max_life)
+        alpha = int(255 * t)
+        img = font_dmg.render(self.text, True, self.color)
+        img.set_alpha(alpha)
+        surf.blit(img, (self.x - img.get_width() // 2, self.y))
+
+
 particles = []
+damage_texts = []
+screen_shake = 0.0
 
 
-def spawn_particles(x, y, color, count=14):
-    for _ in range(count):
-        a = random.uniform(0, math.tau)
-        spd = random.uniform(80, 320)
+def spawn_hit_effects(x, y, color):
+    global screen_shake
+    for _ in range(24):
+        ang = random.uniform(0, math.tau)
+        spd = random.uniform(WIDTH * 0.05, WIDTH * 0.25)
         particles.append(Particle(
             x, y,
-            math.cos(a) * spd, math.sin(a) * spd,
+            math.cos(ang) * spd,
+            math.sin(ang) * spd - HEIGHT * 0.1,
             color,
-            random.uniform(0.25, 0.6),
+            random.uniform(0.3, 0.7),
             random.randint(2, 5),
         ))
-
-
-def draw_snake(surface, time_ms):
-    n = len(snake)
-    for i, (x, y) in enumerate(snake):
-        t = i / max(n - 1, 1)
-        color = lerp_color(SNAKE_HEAD, SNAKE_TAIL, t)
-        px = x * CELL + 2
-        py = y * CELL + 2
-        size = CELL - 4
-        if i == 0:
-            pulse = int(2 * math.sin(time_ms / 200))
-            glow = pygame.Surface((size + 16 + pulse * 2, size + 16 + pulse * 2),
-                                  pygame.SRCALPHA)
-            pygame.draw.rect(glow, (*SNAKE_HEAD, 60), glow.get_rect(),
-                             border_radius=14)
-            surface.blit(glow, (px - 8 - pulse, py - 8 - pulse))
-        draw_rounded_cell(surface, color, px, py, size, radius=8)
-    hx, hy = snake[0]
-    cx = hx * CELL + CELL // 2
-    cy = hy * CELL + CELL // 2
-    draw_eye(surface, cx, cy, direction)
-
-
-def draw_food(surface, time_ms):
-    fx, fy = food
-    cx = fx * CELL + CELL // 2
-    cy = fy * CELL + CELL // 2
-    pulse = 2 * math.sin(time_ms / 150)
-    r_outer = CELL // 2 - 4 + pulse
-    r_inner = r_outer // 2
-    glow = pygame.Surface((CELL * 2, CELL * 2), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (*FOOD_OUTER, 60), (CELL, CELL), int(r_outer + 8))
-    surface.blit(glow, (cx - CELL, cy - CELL))
-    pygame.draw.circle(surface, FOOD_OUTER, (cx, cy), int(r_outer))
-    pygame.draw.circle(surface, FOOD_INNER, (cx - 3, cy - 3), int(r_inner))
-
-
-def draw_hud(surface):
-    panel = pygame.Surface((280, 120), pygame.SRCALPHA)
-    pygame.draw.rect(panel, (0, 0, 0, 120), panel.get_rect(), border_radius=18)
-    pygame.draw.rect(panel, (*ACCENT, 180), panel.get_rect(), 2, border_radius=18)
-    surface.blit(panel, (30, 30))
-    s1 = font_small.render("СЧЁТ", True, TEXT_DIM)
-    s2 = font_med.render(str(score), True, TEXT_COLOR)
-    s3 = font_small.render(f"Рекорд: {best}", True, GOLD)
-    surface.blit(s1, (55, 45))
-    surface.blit(s2, (55, 68))
-    surface.blit(s3, (55, 108))
+    screen_shake = max(screen_shake, HEIGHT * 0.012)
 
 
 # ============================================================
-#           ВВОД: клавиатура + джойстик
+#                      БОЕЦ
 # ============================================================
-def read_direction(keys, joy):
-    """Возвращает новое направление от клавиатуры/джойстика или None."""
-    # --- Клавиатура ---
-    if keys[pygame.K_UP] or keys[pygame.K_w]:
-        return (0, -1)
-    if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-        return (0, 1)
-    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        return (-1, 0)
-    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        return (1, 0)
+class Fighter:
+    def __init__(self, x, color, dark_color, facing, joy_index, keymap):
+        self.x = x
+        self.y = GROUND_Y
+        self.w = FIGHTER_W
+        self.h = FIGHTER_H
+        self.vy = 0
+        self.on_ground = True
+        self.color = color
+        self.dark = dark_color
+        self.facing = facing
+        self.health = 100.0
+        self.display_health = 100.0   # для плавной анимации урона
+        self.ghost_health = 100.0     # жёлтая подложка
+        self.joy_index = joy_index
+        self.keymap = keymap
+        self.hit_flash = 0.0
+        self.anim_t = random.uniform(0, 10)
+        self.rect = pygame.Rect(0, 0, self.w, self.h)
+        self.attack_anim = 0.0
+        self.update_rect()
 
-    # --- Джойстик ---
-    if joy is None:
-        return None
+    def update_rect(self):
+        self.rect = pygame.Rect(
+            int(self.x - self.w // 2),
+            int(self.y - self.h),
+            self.w, self.h
+        )
 
-    # Крестовина
-    if joy.get_numhats() > 0:
-        hx, hy = joy.get_hat(0)
-        if hx != 0 or hy != 0:
-            if abs(hx) >= abs(hy):
-                return (1, 0) if hx > 0 else (-1, 0)
+    def get_axis(self, axis_id):
+        if self.joy_index is None or self.joy_index >= len(joysticks):
+            return 0.0
+        j = joysticks[self.joy_index]
+        if axis_id >= j.get_numaxes():
+            return 0.0
+        val = j.get_axis(axis_id)
+        return 0.0 if abs(val) < DEADZONE else val
+
+    def get_hat(self, hat_id=0):
+        if self.joy_index is None or self.joy_index >= len(joysticks):
+            return (0, 0)
+        j = joysticks[self.joy_index]
+        if hat_id >= j.get_numhats():
+            return (0, 0)
+        return j.get_hat(hat_id)
+
+    def get_button(self, btn_id):
+        if self.joy_index is None or self.joy_index >= len(joysticks):
+            return False
+        j = joysticks[self.joy_index]
+        if btn_id >= j.get_numbuttons():
+            return False
+        return j.get_button(btn_id)
+
+    def move(self, keys, dt):
+        move_dir = 0.0
+        if keys[self.keymap["left"]]:
+            move_dir -= 1.0
+        if keys[self.keymap["right"]]:
+            move_dir += 1.0
+
+        axis_x = self.get_axis(0)
+        if axis_x != 0.0:
+            move_dir += axis_x
+        hat_x, _ = self.get_hat(0)
+        if hat_x != 0:
+            move_dir += hat_x
+
+        move_dir = max(-1.0, min(1.0, move_dir))
+        self.x += move_dir * MOVE_SPEED * dt
+        self.x = max(self.w // 2, min(WIDTH - self.w // 2, self.x))
+
+        # Авторазворот к противнику (классика MK)
+        # (оставляем фиксированный facing — каждый смотрит на центр)
+
+        jump_pressed = keys[self.keymap["jump"]] or self.get_button(BTN_JUMP)
+        if jump_pressed and self.on_ground:
+            self.vy = JUMP_POWER
+            self.on_ground = False
+
+    def apply_gravity(self, dt):
+        self.vy += GRAVITY * dt
+        self.y += self.vy * dt
+        if self.y >= GROUND_Y:
+            self.y = GROUND_Y
+            self.vy = 0
+            self.on_ground = True
+
+    def fire_origin(self):
+        return (self.x + self.facing * self.w // 2, self.y - self.h // 2)
+
+    def take_damage(self, amount):
+        self.health -= amount
+        if self.health < 0:
+            self.health = 0
+        self.hit_flash = 0.25
+        self.attack_anim = 0.0
+        spawn_hit_effects(
+            self.x + self.facing * self.w * 0.2,
+            self.y - self.h * 0.55,
+            (255, 220, 120),
+        )
+        damage_texts.append(DamageText(
+            self.x, self.y - self.h - HEAD_RADIUS - 10,
+            f"-{amount}", (255, 200, 80)
+        ))
+
+    def update_visual(self, dt):
+        # плавная анимация полос здоровья
+        if self.display_health > self.health:
+            self.display_health -= (100 - self.health) * dt * 2.5
+            if self.display_health < self.health:
+                self.display_health = self.health
+        if self.ghost_health > self.health:
+            self.ghost_health -= (self.ghost_health - self.health) * dt * 1.2
+            if self.ghost_health < self.health:
+                self.ghost_health = self.health
+        self.hit_flash = max(0.0, self.hit_flash - dt)
+        self.anim_t += dt
+
+    def draw(self, surface):
+        cx = int(self.x)
+        # Тень
+        shadow_w = int(self.w * 1.2)
+        shadow_h = int(HEIGHT * 0.02)
+        shadow = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 130), (0, 0, shadow_w, shadow_h))
+        surface.blit(shadow, (cx - shadow_w // 2, GROUND_Y - shadow_h // 2))
+
+        # Лёгкое «дыхание»
+        bob = math.sin(self.anim_t * 3.2) * HEIGHT * 0.004
+        base_y = self.y + bob
+
+        # Ноги
+        leg_w = int(self.w * 0.28)
+        leg_h = int(self.h * 0.45)
+        leg_y = base_y - leg_h
+        pygame.draw.rect(surface, self.dark,
+                         (cx - int(self.w * 0.42) - leg_w // 2,
+                          leg_y, leg_w, leg_h), border_radius=6)
+        pygame.draw.rect(surface, self.dark,
+                         (cx + int(self.w * 0.42) - leg_w // 2,
+                          leg_y, leg_w, leg_h), border_radius=6)
+
+        # Торс
+        body_rect = pygame.Rect(
+            cx - self.w // 2,
+            int(base_y - self.h),
+            self.w,
+            int(self.h * 0.62)
+        )
+        body_color = self.color
+        if self.hit_flash > 0:
+            k = self.hit_flash / 0.25
+            body_color = (
+                int(self.color[0] + (255 - self.color[0]) * k),
+                int(self.color[1] + (255 - self.color[1]) * k),
+                int(self.color[2] + (255 - self.color[2]) * k),
+            )
+        pygame.draw.rect(surface, body_color, body_rect, border_radius=10)
+        pygame.draw.rect(surface, (255, 255, 255), body_rect, 2, border_radius=10)
+
+        # Пояс
+        belt_y = body_rect.bottom - int(self.h * 0.06)
+        pygame.draw.rect(surface, (30, 30, 30),
+                         (body_rect.left, belt_y, body_rect.width,
+                          int(self.h * 0.05)))
+        pygame.draw.rect(surface, GOLD,
+                         (body_rect.left, belt_y, body_rect.width,
+                          int(self.h * 0.05)), 2)
+
+        # Руки
+        arm_y = int(body_rect.top + self.h * 0.12)
+        arm_len = int(self.w * 1.0)
+        hand_r = max(6, int(self.h * 0.06))
+
+        # Задняя рука
+        pygame.draw.line(surface, self.dark,
+                         (cx, arm_y),
+                         (cx - self.facing * int(arm_len * 0.5),
+                          arm_y + int(self.h * 0.12)),
+                         max(6, int(self.h * 0.07)))
+        # Передняя рука (вытянута в сторону противника)
+        pygame.draw.line(surface, body_color,
+                         (cx, arm_y),
+                         (cx + self.facing * arm_len,
+                          arm_y + int(self.h * 0.05)),
+                         max(8, int(self.h * 0.09)))
+        pygame.draw.circle(surface, SKIN,
+                           (cx + self.facing * arm_len,
+                            arm_y + int(self.h * 0.05)), hand_r)
+        pygame.draw.circle(surface, (255, 255, 255),
+                           (cx + self.facing * arm_len,
+                            arm_y + int(self.h * 0.05)), hand_r, 2)
+
+        # Голова
+        head_center = (cx, int(base_y - self.h - HEAD_RADIUS + bob * 0.3))
+        pygame.draw.circle(surface, SKIN, head_center, HEAD_RADIUS)
+        pygame.draw.circle(surface, (255, 255, 255), head_center, HEAD_RADIUS, 2)
+
+        # Повязка
+        band_h = max(4, HEAD_RADIUS // 3)
+        band_rect = pygame.Rect(
+            head_center[0] - HEAD_RADIUS,
+            head_center[1] - band_h // 2 - int(HEAD_RADIUS * 0.15),
+            HEAD_RADIUS * 2, band_h
+        )
+        pygame.draw.rect(surface, self.dark, band_rect)
+        # Хвостик повязки
+        pygame.draw.polygon(surface, self.dark, [
+            (head_center[0] - self.facing * HEAD_RADIUS,
+             band_rect.centery),
+            (head_center[0] - self.facing * int(HEAD_RADIUS * 1.6),
+             band_rect.centery - int(HEAD_RADIUS * 0.3)),
+            (head_center[0] - self.facing * int(HEAD_RADIUS * 1.6),
+             band_rect.centery + int(HEAD_RADIUS * 0.6)),
+        ])
+
+        # Глаза
+        eye_dx = int(HEAD_RADIUS * 0.35) * self.facing
+        eye_off = int(HEAD_RADIUS * 0.15)
+        eye_r = max(2, HEAD_RADIUS // 7)
+        pygame.draw.circle(surface, (20, 20, 20),
+                           (head_center[0] + eye_dx,
+                            head_center[1] - eye_off), eye_r)
+        pygame.draw.circle(surface, (20, 20, 20),
+                           (head_center[0] + eye_dx - int(HEAD_RADIUS * 0.55),
+                            head_center[1] - eye_off), eye_r)
+
+    def draw_health_bar(self, surface, x, y, bar_w, bar_h, align_right=False):
+        # Фон
+        pygame.draw.rect(surface, HEALTH_BG, (x, y, bar_w, bar_h), border_radius=8)
+        # Жёлтая «подложка» (показывает недавний урон)
+        ghost_ratio = max(0, self.ghost_health) / 100
+        ghost_w = int(bar_w * ghost_ratio)
+        if ghost_w > 0:
+            gx = x + bar_w - ghost_w if align_right else x
+            pygame.draw.rect(surface, HEALTH_GHOST,
+                             (gx, y, ghost_w, bar_h), border_radius=8)
+        # Здоровье
+        ratio = max(0, self.display_health) / 100
+        fill_w = int(bar_w * ratio)
+        if fill_w > 0:
+            if ratio > 0.5:
+                color = HEALTH_GREEN
+            elif ratio > 0.25:
+                color = HEALTH_YEL
             else:
-                return (0, 1) if hy > 0 else (0, -1)
-
-    # Левый стик
-    if joy.get_numaxes() >= 2:
-        ax = joy.get_axis(0)
-        ay = joy.get_axis(1)
-        if abs(ax) > DEADZONE or abs(ay) > DEADZONE:
-            if abs(ax) >= abs(ay):
-                return (1, 0) if ax > 0 else (-1, 0)
-            else:
-                return (0, 1) if ay > 0 else (0, -1)
-
-    return None
-
-
-def button_pressed(joy, idx):
-    if joy is None or idx >= joy.get_numbuttons():
-        return False
-    return joy.get_button(idx)
+                color = HEALTH_RED
+            fx = x + bar_w - fill_w if align_right else x
+            pygame.draw.rect(surface, color,
+                             (fx, y, fill_w, bar_h), border_radius=8)
+            # Блик
+            shine = pygame.Surface((fill_w, bar_h // 3), pygame.SRCALPHA)
+            shine.fill((255, 255, 255, 50))
+            surface.blit(shine, (fx, y + 2))
+        # Рамка
+        pygame.draw.rect(surface, (200, 200, 200),
+                         (x, y, bar_w, bar_h), 3, border_radius=8)
 
 
 # ============================================================
-#                       ЭКРАНЫ
+#                    ОГНЕННЫЙ ШАР
 # ============================================================
-def start_screen():
+class Fireball:
+    def __init__(self, x, y, direction, color, owner):
+        self.x = x
+        self.y = y
+        self.dir = direction
+        self.color = color
+        self.owner = owner
+        self.radius = FIREBALL_RADIUS
+        self.alive = True
+        self.trail_timer = 0.0
+        self.anim_t = 0.0
+
+    def update(self, dt):
+        self.x += self.dir * FIREBALL_SPEED * dt
+        self.anim_t += dt
+        if self.x < -60 or self.x > WIDTH + 60:
+            self.alive = False
+
+        # Шлейф
+        self.trail_timer += dt
+        if self.trail_timer > 0.02:
+            self.trail_timer = 0.0
+            for _ in range(2):
+                particles.append(Particle(
+                    self.x + random.uniform(-self.radius, self.radius),
+                    self.y + random.uniform(-self.radius, self.radius),
+                    -self.dir * random.uniform(WIDTH * 0.02, WIDTH * 0.08),
+                    random.uniform(-HEIGHT * 0.05, HEIGHT * 0.05),
+                    self.color,
+                    random.uniform(0.2, 0.45),
+                    random.randint(2, 4),
+                ))
+
+    def rect(self):
+        return pygame.Rect(
+            int(self.x - self.radius), int(self.y - self.radius),
+            self.radius * 2, self.radius * 2
+        )
+
+    def draw(self, surface):
+        # Внешнее свечение
+        glow_r = int(self.radius * 2.4)
+        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
+        for i in range(6, 0, -1):
+            a = int(40 * (1 - i / 6))
+            pygame.draw.circle(glow, (*self.color, a),
+                               (glow_r, glow_r),
+                               int(glow_r * i / 6))
+        surface.blit(glow, (int(self.x - glow_r), int(self.y - glow_r)))
+
+        # Ядро
+        pygame.draw.circle(surface, (255, 230, 150),
+                           (int(self.x), int(self.y)), int(self.radius * 1.3))
+        pygame.draw.circle(surface, self.color,
+                           (int(self.x), int(self.y)), self.radius)
+        pygame.draw.circle(surface, (255, 255, 255),
+                           (int(self.x), int(self.y)), max(2, self.radius // 2))
+
+
+# ============================================================
+#                    HUD
+# ============================================================
+def draw_hud(surface, p1, p2, time_left):
+    margin = int(WIDTH * 0.03)
+    bar_w = int(WIDTH * 0.36)
+    bar_h = int(HEIGHT * 0.045)
+    bar_y = int(HEIGHT * 0.04)
+
+    p1.draw_health_bar(surface, margin, bar_y, bar_w, bar_h)
+    p2.draw_health_bar(surface, WIDTH - margin - bar_w, bar_y,
+                       bar_w, bar_h, align_right=True)
+
+    # Тень под текстом имён
+    name1 = font_med.render("ИГРОК 1", True, P1_COLOR)
+    name2 = font_med.render("ИГРОК 2", True, P2_COLOR)
+    sh1 = font_med.render("ИГРОК 1", True, (0, 0, 0))
+    sh2 = font_med.render("ИГРОК 2", True, (0, 0, 0))
+    surface.blit(sh1, (margin + 2, bar_y + bar_h + 12))
+    surface.blit(sh2, (WIDTH - margin - name2.get_width() + 2, bar_y + bar_h + 12))
+    surface.blit(name1, (margin, bar_y + bar_h + 10))
+    surface.blit(name2, (WIDTH - margin - name2.get_width(), bar_y + bar_h + 10))
+
+    # Таймер
+    timer_col = GOLD if time_left > 10 else (255, 80, 80)
+    t_txt = font_big.render(str(int(time_left) + 1), True, timer_col)
+    t_sh = font_big.render(str(int(time_left) + 1), True, (0, 0, 0))
+    tx = WIDTH // 2 - t_txt.get_width() // 2
+    surface.blit(t_sh, (tx + 3, bar_y + 3))
+    surface.blit(t_txt, (tx, bar_y))
+
+    # Рекорд
+    best_txt = font_small.render(f"РЕКОРД: {best}   СЧЁТ: {score}",
+                                 True, GOLD)
+    surface.blit(best_txt,
+                 (WIDTH // 2 - best_txt.get_width() // 2, bar_y + bar_h + 18))
+
+
+# ============================================================
+#                  ЭКРАН ПОБЕДЫ
+# ============================================================
+def game_over_screen(winner):
+    save_score(score)
     t = 0.0
     while True:
         dt = clock.tick(60) / 1000
@@ -296,239 +671,209 @@ def start_screen():
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
-                if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                    return
-            if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == BTN_START or event.button == BTN_BACK:
-                    pygame.quit()
-                    sys.exit()
-                if event.button in (BTN_A, BTN_X):
-                    return
-            if event.type in (pygame.JOYDEVICEADDED, pygame.JOYDEVICEREMOVED):
-                init_joysticks()
-
-        screen.blit(BACKGROUND, (0, 0))
-
-        # Пульсирующий заголовок
-        pulse = 0.5 + 0.5 * math.sin(t * 2)
-        title = font_big.render("ЗМЕЙКА", True, ACCENT)
-        shadow = font_big.render("ЗМЕЙКА", True, (0, 0, 0))
-        tx = WIDTH // 2 - title.get_width() // 2
-        ty = HEIGHT // 2 - 180 + int(math.sin(t * 1.5) * 6)
-        screen.blit(shadow, (tx + 4, ty + 4))
-        screen.blit(title, (tx, ty))
-
-        sub = font_med.render("Стрелки / WASD / Джойстик", True, TEXT_COLOR)
-        screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, HEIGHT // 2 - 40))
-
-        hint1 = font_med.render("SPACE / A — начать", True, GOLD)
-        screen.blit(hint1, (WIDTH // 2 - hint1.get_width() // 2, HEIGHT // 2 + 60))
-
-        hint2 = font_small.render("P — пауза    Q / ESC — выход", True, TEXT_DIM)
-        screen.blit(hint2, (WIDTH // 2 - hint2.get_width() // 2, HEIGHT // 2 + 130))
-
-        jinfo = font_small.render(f"Джойстиков: {len(joysticks)}", True, TEXT_DIM)
-        screen.blit(jinfo, (WIDTH // 2 - jinfo.get_width() // 2, HEIGHT - 80))
-
-        if int(t * 2) % 2 == 0:
-            blink = font_small.render("●", True, ACCENT)
-            screen.blit(blink, (WIDTH // 2 - blink.get_width() // 2, HEIGHT // 2 + 105))
-
-        pygame.display.flip()
-
-
-def pause_screen():
-    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))
-    screen.blit(overlay, (0, 0))
-
-    title = font_big.render("ПАУЗА", True, GOLD)
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 100))
-
-    hint1 = font_med.render("START / P — продолжить", True, TEXT_COLOR)
-    screen.blit(hint1, (WIDTH // 2 - hint1.get_width() // 2, HEIGHT // 2))
-
-    hint2 = font_small.render("ESC — выход", True, TEXT_DIM)
-    screen.blit(hint2, (WIDTH // 2 - hint2.get_width() // 2, HEIGHT // 2 + 70))
-
-    pygame.display.flip()
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
-                if event.key in (pygame.K_p, pygame.K_RETURN, pygame.K_SPACE):
-                    return
-            if event.type == pygame.JOYBUTTONDOWN:
-                if event.button in (BTN_START, BTN_BACK, BTN_A, BTN_X):
-                    return
-        clock.tick(30)
-
-
-def game_over():
-    save_score(score)
-    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))
-    screen.blit(overlay, (0, 0))
-
-    title = font_big.render("ИГРА ОКОНЧЕНА", True, FOOD_OUTER)
-    score_txt = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
-    best_txt = font_med.render(f"Рекорд: {best}", True, GOLD)
-    hint = font_small.render("A / R — заново    START / Q / ESC — выход",
-                             True, TEXT_DIM)
-
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 180))
-    screen.blit(score_txt, (WIDTH // 2 - score_txt.get_width() // 2, HEIGHT // 2 - 60))
-    screen.blit(best_txt, (WIDTH // 2 - best_txt.get_width() // 2, HEIGHT // 2))
-    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 100))
-    pygame.display.flip()
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_q, pygame.K_ESCAPE):
-                    pygame.quit()
-                    sys.exit()
                 if event.key == pygame.K_r:
                     return True
             if event.type == pygame.JOYBUTTONDOWN:
-                if event.button in (BTN_START, BTN_BACK):
+                if event.button == BTN_START:
                     pygame.quit()
                     sys.exit()
-                if event.button == BTN_A:
+                if event.button == BTN_JUMP:
                     return True
 
+        # Затемнение
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 210))
+        screen.blit(overlay, (0, 0))
 
-def reset_game():
-    global snake, direction, food, score, speed
-    snake = [(COLS // 4, ROWS // 2),
-             (COLS // 4 - 1, ROWS // 2),
-             (COLS // 4 - 2, ROWS // 2)]
-    direction = (1, 0)
-    food = spawn_food()
-    score = 0
-    speed = 8
+        # Пульсирующий заголовок
+        pulse = 0.5 + 0.5 * math.sin(t * 3)
+        glow_r = int(HEIGHT * 0.2 + pulse * HEIGHT * 0.05)
+        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*GOLD, 60), (glow_r, glow_r), glow_r)
+        screen.blit(glow, (WIDTH // 2 - glow_r, HEIGHT // 2 - glow_r))
+
+        text = font_big.render(f"{winner} ПОБЕДИЛ!", True, GOLD)
+        sh = font_big.render(f"{winner} ПОБЕДИЛ!", True, (0, 0, 0))
+        tx = WIDTH // 2 - text.get_width() // 2
+        ty = HEIGHT // 2 - text.get_height() - 40
+        screen.blit(sh, (tx + 4, ty + 4))
+        screen.blit(text, (tx, ty))
+
+        s = font_med.render(f"СЧЁТ: {score}", True, TEXT_COLOR)
+        screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 + 20))
+
+        b = font_med.render(f"РЕКОРД: {best}", True, GOLD)
+        screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 80))
+
+        if int(t * 2) % 2 == 0:
+            hint = font_med.render("A / R — заново    START / ESC — выход",
+                                   True, (220, 220, 220))
+            screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2,
+                               HEIGHT // 2 + 170))
+
+        pygame.display.flip()
 
 
+# ============================================================
+#                     ГЛАВНЫЙ ЦИКЛ
+# ============================================================
 def main():
-    global direction, food, score, speed, best
+    global score, best, screen_shake
 
     init_joysticks()
-    joy = joysticks[0] if joysticks else None
 
-    start_screen()
+    # Наборы клавиш для каждого игрока (исправление бага!)
+    P1_KEYS = {
+        "left":  pygame.K_a,
+        "right": pygame.K_d,
+        "jump":  pygame.K_w,
+        "fire":  pygame.K_f,
+    }
+    P2_KEYS = {
+        "left":  pygame.K_LEFT,
+        "right": pygame.K_RIGHT,
+        "jump":  pygame.K_UP,
+        "fire":  pygame.K_RCTRL,
+    }
 
-    reset_game()
+    while True:
+        score = 0
 
-    # Очередь поворотов (буфер до 2), чтобы быстрые нажатия не терялись
-    turn_queue = []
+        p1_joy = 0 if len(joysticks) >= 1 else None
+        p2_joy = 1 if len(joysticks) >= 2 else None
 
-    running = True
-    timer = 0
-    while running:
-        dt = clock.tick(60)
-        time_ms = pygame.time.get_ticks()
+        p1 = Fighter(WIDTH * 0.25, P1_COLOR, P1_DARK, facing=1,
+                     joy_index=p1_joy, keymap=P1_KEYS)
+        p2 = Fighter(WIDTH * 0.75, P2_COLOR, P2_DARK, facing=-1,
+                     joy_index=p2_joy, keymap=P2_KEYS)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                save_score(score)
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+        fireballs = []
+        running = True
+        winner = None
+        time_left = float(ROUND_TIME)
+
+        p1_fire_prev = False
+        p2_fire_prev = False
+
+        while running:
+            dt = clock.tick(60) / 1000
+            dt = min(dt, 0.05)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     save_score(score)
                     pygame.quit()
                     sys.exit()
-                if event.key in (pygame.K_p, pygame.K_RETURN):
-                    pause_screen()
-                    timer = 0
-            if event.type == pygame.JOYBUTTONDOWN:
-                if event.button in (BTN_START, BTN_BACK):
-                    pause_screen()
-                    timer = 0
-            if event.type in (pygame.JOYDEVICEADDED, pygame.JOYDEVICEREMOVED):
-                init_joysticks()
-                joy = joysticks[0] if joysticks else None
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        save_score(score)
+                        pygame.quit()
+                        sys.exit()
+                if event.type in (pygame.JOYDEVICEADDED,
+                                  pygame.JOYDEVICEREMOVED):
+                    init_joysticks()
 
-        # --- Ввод направления ---
-        keys = pygame.key.get_pressed()
-        new_dir = read_direction(keys, joy)
-        if new_dir is not None:
-            # Не даём развернуться на 180°
-            if (new_dir[0] != -direction[0] or new_dir[1] != -direction[1]):
-                # Заменяем конец очереди на новое нажатие
-                if not turn_queue or turn_queue[-1] != new_dir:
-                    turn_queue.append(new_dir)
-                    if len(turn_queue) > 2:
-                        turn_queue.pop(0)
+            keys = pygame.key.get_pressed()
 
-        timer += dt
-        step_delay = 1000 / speed
-        if timer >= step_delay:
-            timer = 0
+            # --- Огонь ---
+            p1_fire = keys[P1_KEYS["fire"]] or p1.get_button(BTN_FIRE)
+            if p1_fire and not p1_fire_prev:
+                ox, oy = p1.fire_origin()
+                fireballs.append(Fireball(ox, oy, 1, FIRE_P1, p1))
+            p1_fire_prev = p1_fire
 
-            # Применяем поворот из очереди
-            while turn_queue:
-                cand = turn_queue.pop(0)
-                if cand[0] != -direction[0] or cand[1] != -direction[1]:
-                    direction = cand
-                    break
+            p2_fire = keys[P2_KEYS["fire"]] or p2.get_button(BTN_FIRE)
+            if p2_fire and not p2_fire_prev:
+                ox, oy = p2.fire_origin()
+                fireballs.append(Fireball(ox, oy, -1, FIRE_P2, p2))
+            p2_fire_prev = p2_fire
 
-            head_x, head_y = snake[0]
-            new_head = (head_x + direction[0], head_y + direction[1])
+            # --- Движение ---
+            p1.move(keys, dt)
+            p2.move(keys, dt)
+            p1.apply_gravity(dt)
+            p2.apply_gravity(dt)
+            p1.update_rect()
+            p2.update_rect()
+            p1.update_visual(dt)
+            p2.update_visual(dt)
 
-            # Столкновение со стеной или собой
-            if not (0 <= new_head[0] < COLS and 0 <= new_head[1] < ROWS) or \
-               new_head in snake:
-                if score > best:
-                    best = score
-                # Частицы на месте смерти
-                cx = head_x * CELL + CELL // 2
-                cy = head_y * CELL + CELL // 2
-                spawn_particles(cx, cy, FOOD_OUTER, 30)
-                if game_over():
-                    reset_game()
-                    turn_queue.clear()
-                    timer = 0
-                    particles.clear()
+            for fb in fireballs:
+                fb.update(dt)
+
+            # --- Попадания ---
+            for fb in fireballs:
+                if not fb.alive:
                     continue
+                for fighter in (p1, p2):
+                    if fighter is fb.owner:
+                        continue
+                    if fb.rect().colliderect(fighter.rect):
+                        fighter.take_damage(FIREBALL_DAMAGE)
+                        score += 5
+                        if score > best:
+                            best = score
+                        fb.alive = False
+                        if fighter.health <= 0:
+                            winner = "ИГРОК 1" if fighter is p2 else "ИГРОК 2"
+                            running = False
+
+            # --- Столкновения снарядов ---
+            for i in range(len(fireballs)):
+                for j in range(i + 1, len(fireballs)):
+                    a, b = fireballs[i], fireballs[j]
+                    if a.alive and b.alive and a.owner is not b.owner:
+                        if a.rect().colliderect(b.rect()):
+                            spawn_hit_effects(
+                                (a.x + b.x) / 2, (a.y + b.y) / 2,
+                                (255, 255, 200)
+                            )
+                            a.alive = False
+                            b.alive = False
+
+            fireballs = [fb for fb in fireballs if fb.alive]
+
+            # --- Таймер ---
+            time_left -= dt
+            if time_left <= 0:
+                # Побеждает тот, у кого больше здоровья
+                if p1.health > p2.health:
+                    winner = "ИГРОК 1"
+                elif p2.health > p1.health:
+                    winner = "ИГРОК 2"
                 else:
-                    return
+                    winner = "НИЧЬЯ"
+                running = False
 
-            snake.insert(0, new_head)
+            # --- Частицы ---
+            particles[:] = [p for p in particles if p.update(dt)]
+            damage_texts[:] = [d for d in damage_texts if d.update(dt)]
 
-            if new_head == food:
-                score += 1
-                # Частицы на месте еды
-                fx, fy = food
-                spawn_particles(fx * CELL + CELL // 2,
-                                fy * CELL + CELL // 2,
-                                FOOD_OUTER, 16)
-                food = spawn_food()
-                if speed < 22:
-                    speed += 0.4
-            else:
-                snake.pop()
+            # --- Тряска ---
+            shake_x = shake_y = 0
+            if screen_shake > 0:
+                shake_x = random.randint(-int(screen_shake), int(screen_shake))
+                shake_y = random.randint(-int(screen_shake), int(screen_shake))
+                screen_shake *= 0.88
+                if screen_shake < 0.5:
+                    screen_shake = 0
 
-        # --- Отрисовка ---
-        screen.blit(BACKGROUND, (0, 0))
-        draw_food(screen, time_ms)
-        draw_snake(screen, time_ms)
+            # --- Рисование ---
+            screen.blit(BACKGROUND, (shake_x, shake_y))
+            p1.draw(screen)
+            p2.draw(screen)
+            for fb in fireballs:
+                fb.draw(screen)
+            for p in particles:
+                p.draw(screen)
+            for d in damage_texts:
+                d.draw(screen)
+            draw_hud(screen, p1, p2, max(0, time_left))
 
-        for p in particles:
-            p.draw(screen)
-        particles[:] = [p for p in particles if p.update(dt / 1000)]
+            pygame.display.flip()
 
-        draw_hud(screen)
-        pygame.display.flip()
+        if not game_over_screen(winner):
+            break
 
 
 if __name__ == "__main__":
