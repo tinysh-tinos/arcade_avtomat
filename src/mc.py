@@ -1,7 +1,5 @@
 import sys
 import subprocess
-import math
-import random
 
 def install_and_import(package):
     try:
@@ -12,8 +10,10 @@ def install_and_import(package):
 install_and_import('pygame')
 
 import pygame
+import random
 import os
 import json
+import math
 
 def save_score(score):
     path = os.environ.get("ARCADE_SCORE_FILE")
@@ -30,67 +30,92 @@ pygame.joystick.init()
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Mortal Kombat")
+pygame.display.set_caption("Pac-Man")
 clock = pygame.time.Clock()
 
-# ---------- Палитра ----------
-SKY_TOP    = (12, 8, 28)
-SKY_MID    = (48, 18, 62)
-SKY_BOT    = (120, 40, 50)
-SUN_COLOR  = (255, 180, 90)
-SUN_GLOW   = (255, 120, 60)
-MOUNTAIN_1 = (28, 16, 40)
-MOUNTAIN_2 = (18, 10, 28)
-TEMPLE_COL = (35, 22, 35)
-TEMPLE_DARK= (22, 14, 24)
-GROUND_COL = (58, 40, 34)
-GROUND_LT  = (82, 58, 48)
-GROUND_DK  = (34, 22, 20)
+BG_COLOR = (8, 8, 20)
+BG_GLOW_1 = (20, 15, 50)
+BG_GLOW_2 = (10, 20, 45)
+WALL_COLOR = (30, 60, 200)
+WALL_GLOW = (60, 120, 255)
+WALL_EDGE = (120, 180, 255)
+PELLET_COLOR = (255, 220, 180)
+POWER_COLOR = (255, 180, 60)
+PAC_COLOR = (255, 220, 40)
+PAC_GLOW = (255, 200, 100)
+GHOST_RED = (255, 60, 60)
+GHOST_PINK = (255, 150, 200)
+GHOST_CYAN = (100, 220, 240)
+GHOST_ORANGE = (255, 160, 60)
+GHOST_FRIGHT = (60, 80, 255)
+GHOST_FRIGHT_FLASH = (230, 230, 255)
+EYE_WHITE = (255, 255, 255)
+EYE_BLUE = (40, 80, 220)
+TEXT_COLOR = (230, 240, 255)
+TEXT_DIM = (150, 170, 200)
+ACCENT = (100, 180, 255)
+GOLD = (255, 215, 80)
 
-P1_COLOR   = (70, 150, 255)
-P1_DARK    = (30, 80, 170)
-P2_COLOR   = (255, 90, 90)
-P2_DARK    = (160, 40, 50)
-SKIN       = (230, 190, 150)
-SKIN_DARK  = (190, 150, 115)
-FIRE_P1    = (120, 210, 255)
-FIRE_P2    = (255, 150, 60)
+MAZE = [
+    "############################",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#o####.#####.##.#####.####o#",
+    "#.####.#####.##.#####.####.#",
+    "#..........................#",
+    "#.####.##.########.##.####.#",
+    "#.####.##.########.##.####.#",
+    "#......##....##....##......#",
+    "######.#####.##.#####.######",
+    "     #.#####.##.#####.#     ",
+    "     #.##          ##.#     ",
+    "     #.## ###--### ##.#     ",
+    "######.## #      # ##.######",
+    "      .   #      #   .      ",
+    "######.## #      # ##.######",
+    "     #.## ######## ##.#     ",
+    "     #.##          ##.#     ",
+    "     #.## ######## ##.#     ",
+    "######.## ######## ##.######",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#.####.#####.##.#####.####.#",
+    "#o..##.......##.......##..o#",
+    "###.##.##.########.##.##.###",
+    "###.##.##.########.##.##.###",
+    "#......##....##....##......#",
+    "#.##########.##.##########.#",
+    "#.##########.##.##########.#",
+    "#..........................#",
+    "############################",
+]
 
-HEALTH_GREEN = (70, 230, 90)
-HEALTH_YEL   = (240, 200, 60)
-HEALTH_RED   = (230, 50, 50)
-HEALTH_BG    = (30, 16, 20)
-HEALTH_GHOST = (240, 200, 60)
-TEXT_COLOR   = (255, 255, 255)
-GOLD         = (255, 215, 80)
+ROWS = len(MAZE)
+COLS = len(MAZE[0])
+CELL = min((WIDTH - 100) // COLS, (HEIGHT - 160) // ROWS)
+BOARD_W = COLS * CELL
+BOARD_H = ROWS * CELL
+BOARD_X = (WIDTH - BOARD_W) // 2
+BOARD_Y = (HEIGHT - BOARD_H) // 2 + 30
 
-font_big   = pygame.font.SysFont("Impact", int(HEIGHT * 0.11))
-font_med   = pygame.font.SysFont("Impact", int(HEIGHT * 0.055))
-font_small = pygame.font.SysFont("Arial", int(HEIGHT * 0.028))
-font_dmg   = pygame.font.SysFont("Impact", int(HEIGHT * 0.035))
+PAC_RADIUS = CELL // 2 - 3
+PAC_SPEED = 3.2 * CELL
+GHOST_SPEED = 2.6 * CELL
+GHOST_FRIGHT_SPEED = 1.6 * CELL
 
-GRAVITY         = HEIGHT * 2.8
-JUMP_POWER      = -HEIGHT * 1.05
-MOVE_SPEED      = WIDTH * 0.26
-FIREBALL_SPEED  = WIDTH * 0.65
-FIREBALL_DAMAGE = 10
-ROUND_TIME      = 60
-
-GROUND_H = int(HEIGHT * 0.16)
-GROUND_Y = HEIGHT - GROUND_H
-
-FIGHTER_W = int(WIDTH * 0.05)
-FIGHTER_H = int(HEIGHT * 0.17)
-FIREBALL_RADIUS = int(HEIGHT * 0.022)
-HEAD_RADIUS     = int(HEIGHT * 0.038)
+font_big = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.08), bold=True)
+font_med = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.04), bold=True)
+font_small = pygame.font.SysFont("Segoe UI", int(HEIGHT * 0.028))
 
 score = 0
-best  = 0
+best = 0
 
+# ---------- Настройки джойстиков ----------
 DEADZONE = 0.4
-BTN_JUMP  = 0
-BTN_FIRE  = 2
-BTN_START = 7
+BTN_A = 0        # A / Cross
+BTN_X = 2        # X / Square
+BTN_START = 7    # Start / Options
+BTN_BACK = 6     # Back / Select
 
 joysticks = []
 
@@ -103,125 +128,53 @@ def init_joysticks():
         j = pygame.joystick.Joystick(i)
         j.init()
         joysticks.append(j)
+    print(f"Найдено джойстиков: {len(joysticks)}")
 
 
-# ============================================================
-#                       ФОН
-# ============================================================
+# ---------- Фон с мягким свечением ----------
 def make_background():
-    bg = pygame.Surface((WIDTH, HEIGHT))
-
-    # --- Небо: трёхцветный градиент ---
-    for y in range(GROUND_Y):
-        t = y / GROUND_Y
-        if t < 0.5:
-            k = t / 0.5
-            r = int(SKY_TOP[0] * (1 - k) + SKY_MID[0] * k)
-            g = int(SKY_TOP[1] * (1 - k) + SKY_MID[1] * k)
-            b = int(SKY_TOP[2] * (1 - k) + SKY_MID[2] * k)
-        else:
-            k = (t - 0.5) / 0.5
-            r = int(SKY_MID[0] * (1 - k) + SKY_BOT[0] * k)
-            g = int(SKY_MID[1] * (1 - k) + SKY_BOT[1] * k)
-            b = int(SKY_MID[2] * (1 - k) + SKY_BOT[2] * k)
-        pygame.draw.line(bg, (r, g, b), (0, y), (WIDTH, y))
-
-    # --- Звёзды в верхней части ---
-    random.seed(42)
-    for _ in range(160):
-        sx = random.randint(0, WIDTH)
-        sy = random.randint(0, int(GROUND_Y * 0.55))
-        brightness = random.randint(120, 255)
-        size = random.choice([1, 1, 1, 2])
-        pygame.draw.circle(bg, (brightness, brightness, brightness), (sx, sy), size)
-    random.seed()
-
-    # --- Солнце с сиянием ---
-    sun_x = int(WIDTH * 0.72)
-    sun_y = int(GROUND_Y * 0.55)
-    sun_r = int(HEIGHT * 0.13)
-    for i in range(12, 0, -1):
-        radius = sun_r + i * int(HEIGHT * 0.012)
-        alpha = int(60 * (1 - i / 12))
-        glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*SUN_GLOW, alpha), (radius, radius), radius)
-        bg.blit(glow, (sun_x - radius, sun_y - radius))
-    pygame.draw.circle(bg, SUN_COLOR, (sun_x, sun_y), sun_r)
-    pygame.draw.circle(bg, (255, 220, 160), (sun_x, sun_y), int(sun_r * 0.75))
-
-    # --- Дальние горы ---
-    def draw_mountains(color, base_y, height_scale, seed, points_count=14):
-        random.seed(seed)
-        pts = [(0, GROUND_Y)]
-        for i in range(points_count + 1):
-            x = int(WIDTH * i / points_count)
-            y = base_y - random.randint(0, int(HEIGHT * height_scale))
-            pts.append((x, y))
-        pts.append((WIDTH, GROUND_Y))
-        pygame.draw.polygon(bg, color, pts)
-        random.seed()
-
-    draw_mountains(MOUNTAIN_2, int(GROUND_Y * 1.0), 0.20, 1, 12)
-    draw_mountains(MOUNTAIN_1, int(GROUND_Y * 1.0), 0.14, 2, 16)
-
-    # --- Пагода / храм вдалеке ---
-    def draw_pagoda(cx, base_y, w, h):
-        # основание
-        pygame.draw.rect(bg, TEMPLE_COL, (cx - w, base_y - h, w * 2, h))
-        # крыши (три уровня)
-        for level in range(3):
-            ly = base_y - h + int(h * level * 0.3)
-            lw = int(w * (1.4 - level * 0.15))
-            lh = int(h * 0.12)
-            # трапеция крыши
-            pygame.draw.polygon(bg, TEMPLE_DARK, [
-                (cx - lw, ly + lh),
-                (cx + lw, ly + lh),
-                (cx + int(lw * 0.7), ly),
-                (cx - int(lw * 0.7), ly),
-            ])
-        # шпиль
-        pygame.draw.polygon(bg, TEMPLE_DARK, [
-            (cx - 6, base_y - h - int(h * 0.05)),
-            (cx + 6, base_y - h - int(h * 0.05)),
-            (cx, base_y - h - int(h * 0.15)),
-        ])
-
-    draw_pagoda(int(WIDTH * 0.18), GROUND_Y + 10, int(WIDTH * 0.055), int(HEIGHT * 0.22))
-    draw_pagoda(int(WIDTH * 0.82), GROUND_Y + 10, int(WIDTH * 0.045), int(HEIGHT * 0.18))
-
-    # --- Земля (арена) ---
-    pygame.draw.rect(bg, GROUND_COL, (0, GROUND_Y, WIDTH, GROUND_H))
-    # Верхняя кромка
-    pygame.draw.rect(bg, GROUND_LT, (0, GROUND_Y, WIDTH, int(HEIGHT * 0.008)))
-    # Текстура — пятна песка
-    random.seed(7)
-    for _ in range(400):
-        x = random.randint(0, WIDTH)
-        y = random.randint(GROUND_Y + 10, HEIGHT - 2)
-        r = random.randint(2, 7)
-        shade = random.randint(-15, 15)
-        col = (
-            max(0, min(255, GROUND_COL[0] + shade)),
-            max(0, min(255, GROUND_COL[1] + shade)),
-            max(0, min(255, GROUND_COL[2] + shade)),
-        )
-        pygame.draw.circle(bg, col, (x, y), r)
-    random.seed()
-    # Линии перспективы
-    for i in range(1, 14):
-        y = GROUND_Y + int(GROUND_H * (i / 14) ** 1.6)
-        pygame.draw.line(bg, GROUND_DK, (0, y), (WIDTH, y), 1)
-
-    return bg
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    surf.fill(BG_COLOR)
+    # Мягкие радиальные градиенты
+    for cx, cy, color in [
+        (WIDTH * 0.25, HEIGHT * 0.3, BG_GLOW_1),
+        (WIDTH * 0.75, HEIGHT * 0.7, BG_GLOW_2),
+    ]:
+        for r in range(int(WIDTH * 0.4), 0, -int(WIDTH * 0.02)):
+            t = r / (WIDTH * 0.4)
+            a = int(40 * (1 - t))
+            s = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (*color, a), (r, r), r)
+            surf.blit(s, (cx - r, cy - r))
+    return surf
 
 
 BACKGROUND = make_background()
 
 
-# ============================================================
-#                     ЭФФЕКТЫ
-# ============================================================
+def cell_center(col, row):
+    return (BOARD_X + col * CELL + CELL // 2,
+            BOARD_Y + row * CELL + CELL // 2)
+
+
+def is_wall(col, row):
+    if row < 0 or row >= ROWS or col < 0 or col >= COLS:
+        return True
+    return MAZE[row][col] == "#"
+
+
+def make_grid():
+    pellets = set()
+    powers = set()
+    for r, row in enumerate(MAZE):
+        for c, ch in enumerate(row):
+            if ch == ".":
+                pellets.add((c, r))
+            elif ch == "o":
+                powers.add((c, r))
+    return pellets, powers
+
+
 class Particle:
     def __init__(self, x, y, vx, vy, color, life, size):
         self.x, self.y = x, y
@@ -234,7 +187,8 @@ class Particle:
     def update(self, dt):
         self.x += self.vx * dt
         self.y += self.vy * dt
-        self.vy += HEIGHT * 1.2 * dt
+        self.vx *= 0.94
+        self.vy *= 0.94
         self.life -= dt
         return self.life > 0
 
@@ -247,422 +201,434 @@ class Particle:
         surf.blit(s, (int(self.x - r), int(self.y - r)))
 
 
-class DamageText:
-    def __init__(self, x, y, text, color):
-        self.x, self.y = x, y
-        self.text = text
-        self.color = color
-        self.life = 0.9
-        self.max_life = 0.9
-
-    def update(self, dt):
-        self.y -= HEIGHT * 0.12 * dt
-        self.life -= dt
-        return self.life > 0
-
-    def draw(self, surf):
-        t = max(0, self.life / self.max_life)
-        alpha = int(255 * t)
-        img = font_dmg.render(self.text, True, self.color)
-        img.set_alpha(alpha)
-        surf.blit(img, (self.x - img.get_width() // 2, self.y))
-
-
 particles = []
-damage_texts = []
-screen_shake = 0.0
 
 
-def spawn_hit_effects(x, y, color):
-    global screen_shake
-    for _ in range(24):
-        ang = random.uniform(0, math.tau)
-        spd = random.uniform(WIDTH * 0.05, WIDTH * 0.25)
+def spawn_particles(x, y, color, count=8):
+    for _ in range(count):
+        a = random.uniform(0, math.tau)
+        spd = random.uniform(CELL * 1.5, CELL * 4.5)
         particles.append(Particle(
             x, y,
-            math.cos(ang) * spd,
-            math.sin(ang) * spd - HEIGHT * 0.1,
+            math.cos(a) * spd, math.sin(a) * spd,
             color,
-            random.uniform(0.3, 0.7),
-            random.randint(2, 5),
-        ))
-    screen_shake = max(screen_shake, HEIGHT * 0.012)
-
-
-# ============================================================
-#                      БОЕЦ
-# ============================================================
-class Fighter:
-    def __init__(self, x, color, dark_color, facing, joy_index, keymap):
-        self.x = x
-        self.y = GROUND_Y
-        self.w = FIGHTER_W
-        self.h = FIGHTER_H
-        self.vy = 0
-        self.on_ground = True
-        self.color = color
-        self.dark = dark_color
-        self.facing = facing
-        self.health = 100.0
-        self.display_health = 100.0   # для плавной анимации урона
-        self.ghost_health = 100.0     # жёлтая подложка
-        self.joy_index = joy_index
-        self.keymap = keymap
-        self.hit_flash = 0.0
-        self.anim_t = random.uniform(0, 10)
-        self.rect = pygame.Rect(0, 0, self.w, self.h)
-        self.attack_anim = 0.0
-        self.update_rect()
-
-    def update_rect(self):
-        self.rect = pygame.Rect(
-            int(self.x - self.w // 2),
-            int(self.y - self.h),
-            self.w, self.h
-        )
-
-    def get_axis(self, axis_id):
-        if self.joy_index is None or self.joy_index >= len(joysticks):
-            return 0.0
-        j = joysticks[self.joy_index]
-        if axis_id >= j.get_numaxes():
-            return 0.0
-        val = j.get_axis(axis_id)
-        return 0.0 if abs(val) < DEADZONE else val
-
-    def get_hat(self, hat_id=0):
-        if self.joy_index is None or self.joy_index >= len(joysticks):
-            return (0, 0)
-        j = joysticks[self.joy_index]
-        if hat_id >= j.get_numhats():
-            return (0, 0)
-        return j.get_hat(hat_id)
-
-    def get_button(self, btn_id):
-        if self.joy_index is None or self.joy_index >= len(joysticks):
-            return False
-        j = joysticks[self.joy_index]
-        if btn_id >= j.get_numbuttons():
-            return False
-        return j.get_button(btn_id)
-
-    def move(self, keys, dt):
-        move_dir = 0.0
-        if keys[self.keymap["left"]]:
-            move_dir -= 1.0
-        if keys[self.keymap["right"]]:
-            move_dir += 1.0
-
-        axis_x = self.get_axis(0)
-        if axis_x != 0.0:
-            move_dir += axis_x
-        hat_x, _ = self.get_hat(0)
-        if hat_x != 0:
-            move_dir += hat_x
-
-        move_dir = max(-1.0, min(1.0, move_dir))
-        self.x += move_dir * MOVE_SPEED * dt
-        self.x = max(self.w // 2, min(WIDTH - self.w // 2, self.x))
-
-        # Авторазворот к противнику (классика MK)
-        # (оставляем фиксированный facing — каждый смотрит на центр)
-
-        jump_pressed = keys[self.keymap["jump"]] or self.get_button(BTN_JUMP)
-        if jump_pressed and self.on_ground:
-            self.vy = JUMP_POWER
-            self.on_ground = False
-
-    def apply_gravity(self, dt):
-        self.vy += GRAVITY * dt
-        self.y += self.vy * dt
-        if self.y >= GROUND_Y:
-            self.y = GROUND_Y
-            self.vy = 0
-            self.on_ground = True
-
-    def fire_origin(self):
-        return (self.x + self.facing * self.w // 2, self.y - self.h // 2)
-
-    def take_damage(self, amount):
-        self.health -= amount
-        if self.health < 0:
-            self.health = 0
-        self.hit_flash = 0.25
-        self.attack_anim = 0.0
-        spawn_hit_effects(
-            self.x + self.facing * self.w * 0.2,
-            self.y - self.h * 0.55,
-            (255, 220, 120),
-        )
-        damage_texts.append(DamageText(
-            self.x, self.y - self.h - HEAD_RADIUS - 10,
-            f"-{amount}", (255, 200, 80)
+            random.uniform(0.2, 0.5),
+            random.randint(2, 4),
         ))
 
-    def update_visual(self, dt):
-        # плавная анимация полос здоровья
-        if self.display_health > self.health:
-            self.display_health -= (100 - self.health) * dt * 2.5
-            if self.display_health < self.health:
-                self.display_health = self.health
-        if self.ghost_health > self.health:
-            self.ghost_health -= (self.ghost_health - self.health) * dt * 1.2
-            if self.ghost_health < self.health:
-                self.ghost_health = self.health
-        self.hit_flash = max(0.0, self.hit_flash - dt)
-        self.anim_t += dt
 
-    def draw(self, surface):
-        cx = int(self.x)
-        # Тень
-        shadow_w = int(self.w * 1.2)
-        shadow_h = int(HEIGHT * 0.02)
-        shadow = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 130), (0, 0, shadow_w, shadow_h))
-        surface.blit(shadow, (cx - shadow_w // 2, GROUND_Y - shadow_h // 2))
-
-        # Лёгкое «дыхание»
-        bob = math.sin(self.anim_t * 3.2) * HEIGHT * 0.004
-        base_y = self.y + bob
-
-        # Ноги
-        leg_w = int(self.w * 0.28)
-        leg_h = int(self.h * 0.45)
-        leg_y = base_y - leg_h
-        pygame.draw.rect(surface, self.dark,
-                         (cx - int(self.w * 0.42) - leg_w // 2,
-                          leg_y, leg_w, leg_h), border_radius=6)
-        pygame.draw.rect(surface, self.dark,
-                         (cx + int(self.w * 0.42) - leg_w // 2,
-                          leg_y, leg_w, leg_h), border_radius=6)
-
-        # Торс
-        body_rect = pygame.Rect(
-            cx - self.w // 2,
-            int(base_y - self.h),
-            self.w,
-            int(self.h * 0.62)
-        )
-        body_color = self.color
-        if self.hit_flash > 0:
-            k = self.hit_flash / 0.25
-            body_color = (
-                int(self.color[0] + (255 - self.color[0]) * k),
-                int(self.color[1] + (255 - self.color[1]) * k),
-                int(self.color[2] + (255 - self.color[2]) * k),
-            )
-        pygame.draw.rect(surface, body_color, body_rect, border_radius=10)
-        pygame.draw.rect(surface, (255, 255, 255), body_rect, 2, border_radius=10)
-
-        # Пояс
-        belt_y = body_rect.bottom - int(self.h * 0.06)
-        pygame.draw.rect(surface, (30, 30, 30),
-                         (body_rect.left, belt_y, body_rect.width,
-                          int(self.h * 0.05)))
-        pygame.draw.rect(surface, GOLD,
-                         (body_rect.left, belt_y, body_rect.width,
-                          int(self.h * 0.05)), 2)
-
-        # Руки
-        arm_y = int(body_rect.top + self.h * 0.12)
-        arm_len = int(self.w * 1.0)
-        hand_r = max(6, int(self.h * 0.06))
-
-        # Задняя рука
-        pygame.draw.line(surface, self.dark,
-                         (cx, arm_y),
-                         (cx - self.facing * int(arm_len * 0.5),
-                          arm_y + int(self.h * 0.12)),
-                         max(6, int(self.h * 0.07)))
-        # Передняя рука (вытянута в сторону противника)
-        pygame.draw.line(surface, body_color,
-                         (cx, arm_y),
-                         (cx + self.facing * arm_len,
-                          arm_y + int(self.h * 0.05)),
-                         max(8, int(self.h * 0.09)))
-        pygame.draw.circle(surface, SKIN,
-                           (cx + self.facing * arm_len,
-                            arm_y + int(self.h * 0.05)), hand_r)
-        pygame.draw.circle(surface, (255, 255, 255),
-                           (cx + self.facing * arm_len,
-                            arm_y + int(self.h * 0.05)), hand_r, 2)
-
-        # Голова
-        head_center = (cx, int(base_y - self.h - HEAD_RADIUS + bob * 0.3))
-        pygame.draw.circle(surface, SKIN, head_center, HEAD_RADIUS)
-        pygame.draw.circle(surface, (255, 255, 255), head_center, HEAD_RADIUS, 2)
-
-        # Повязка
-        band_h = max(4, HEAD_RADIUS // 3)
-        band_rect = pygame.Rect(
-            head_center[0] - HEAD_RADIUS,
-            head_center[1] - band_h // 2 - int(HEAD_RADIUS * 0.15),
-            HEAD_RADIUS * 2, band_h
-        )
-        pygame.draw.rect(surface, self.dark, band_rect)
-        # Хвостик повязки
-        pygame.draw.polygon(surface, self.dark, [
-            (head_center[0] - self.facing * HEAD_RADIUS,
-             band_rect.centery),
-            (head_center[0] - self.facing * int(HEAD_RADIUS * 1.6),
-             band_rect.centery - int(HEAD_RADIUS * 0.3)),
-            (head_center[0] - self.facing * int(HEAD_RADIUS * 1.6),
-             band_rect.centery + int(HEAD_RADIUS * 0.6)),
-        ])
-
-        # Глаза
-        eye_dx = int(HEAD_RADIUS * 0.35) * self.facing
-        eye_off = int(HEAD_RADIUS * 0.15)
-        eye_r = max(2, HEAD_RADIUS // 7)
-        pygame.draw.circle(surface, (20, 20, 20),
-                           (head_center[0] + eye_dx,
-                            head_center[1] - eye_off), eye_r)
-        pygame.draw.circle(surface, (20, 20, 20),
-                           (head_center[0] + eye_dx - int(HEAD_RADIUS * 0.55),
-                            head_center[1] - eye_off), eye_r)
-
-    def draw_health_bar(self, surface, x, y, bar_w, bar_h, align_right=False):
-        # Фон
-        pygame.draw.rect(surface, HEALTH_BG, (x, y, bar_w, bar_h), border_radius=8)
-        # Жёлтая «подложка» (показывает недавний урон)
-        ghost_ratio = max(0, self.ghost_health) / 100
-        ghost_w = int(bar_w * ghost_ratio)
-        if ghost_w > 0:
-            gx = x + bar_w - ghost_w if align_right else x
-            pygame.draw.rect(surface, HEALTH_GHOST,
-                             (gx, y, ghost_w, bar_h), border_radius=8)
-        # Здоровье
-        ratio = max(0, self.display_health) / 100
-        fill_w = int(bar_w * ratio)
-        if fill_w > 0:
-            if ratio > 0.5:
-                color = HEALTH_GREEN
-            elif ratio > 0.25:
-                color = HEALTH_YEL
-            else:
-                color = HEALTH_RED
-            fx = x + bar_w - fill_w if align_right else x
-            pygame.draw.rect(surface, color,
-                             (fx, y, fill_w, bar_h), border_radius=8)
-            # Блик
-            shine = pygame.Surface((fill_w, bar_h // 3), pygame.SRCALPHA)
-            shine.fill((255, 255, 255, 50))
-            surface.blit(shine, (fx, y + 2))
-        # Рамка
-        pygame.draw.rect(surface, (200, 200, 200),
-                         (x, y, bar_w, bar_h), 3, border_radius=8)
+def draw_glow(surface, x, y, radius, color, alpha=120):
+    s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+    for i in range(6, 0, -1):
+        r = int(radius * i / 6)
+        a = int(alpha * (i / 6) * 0.4)
+        pygame.draw.circle(s, (*color, a), (radius, radius), r)
+    surface.blit(s, (x - radius, y - radius))
 
 
-# ============================================================
-#                    ОГНЕННЫЙ ШАР
-# ============================================================
-class Fireball:
-    def __init__(self, x, y, direction, color, owner):
-        self.x = x
-        self.y = y
-        self.dir = direction
-        self.color = color
-        self.owner = owner
-        self.radius = FIREBALL_RADIUS
-        self.alive = True
-        self.trail_timer = 0.0
-        self.anim_t = 0.0
+class Actor:
+    def __init__(self, col, row, speed):
+        self.col = col
+        self.row = row
+        self.x = BOARD_X + col * CELL + CELL // 2
+        self.y = BOARD_Y + row * CELL + CELL // 2
+        self.dir = (0, 0)
+        self.speed = speed
+
+    def can_move(self, direction):
+        return not is_wall(self.col + direction[0], self.row + direction[1])
+
+    def step(self, dt):
+        if self.dir == (0, 0):
+            return
+
+        dist = self.speed * dt
+
+        if self.dir[0] > 0:
+            target_x = BOARD_X + (self.col + 1) * CELL + CELL // 2
+            target_y = BOARD_Y + self.row * CELL + CELL // 2
+        elif self.dir[0] < 0:
+            target_x = BOARD_X + (self.col - 1) * CELL + CELL // 2
+            target_y = BOARD_Y + self.row * CELL + CELL // 2
+        elif self.dir[1] > 0:
+            target_x = BOARD_X + self.col * CELL + CELL // 2
+            target_y = BOARD_Y + (self.row + 1) * CELL + CELL // 2
+        else:
+            target_x = BOARD_X + self.col * CELL + CELL // 2
+            target_y = BOARD_Y + (self.row - 1) * CELL + CELL // 2
+
+        dx = target_x - self.x
+        dy = target_y - self.y
+        length = math.hypot(dx, dy)
+
+        if length <= dist:
+            self.x = target_x
+            self.y = target_y
+            self.col += self.dir[0]
+            self.row += self.dir[1]
+            if not self.can_move(self.dir):
+                self.dir = (0, 0)
+        else:
+            self.x += dx / length * dist
+            self.y += dy / length * dist
+
+    def at_center(self):
+        cx, cy = cell_center(self.col, self.row)
+        return abs(self.x - cx) < 1 and abs(self.y - cy) < 1
+
+
+class Pac(Actor):
+    def __init__(self):
+        super().__init__(14, 23, PAC_SPEED)
+        self.next_dir = (0, 0)
+        self.mouth = 0
+        self.mouth_dir = 1
 
     def update(self, dt):
-        self.x += self.dir * FIREBALL_SPEED * dt
-        self.anim_t += dt
-        if self.x < -60 or self.x > WIDTH + 60:
-            self.alive = False
+        if self.next_dir == (-self.dir[0], -self.dir[1]) and self.dir != (0, 0):
+            self.dir = self.next_dir
+            self.next_dir = (0, 0)
 
-        # Шлейф
-        self.trail_timer += dt
-        if self.trail_timer > 0.02:
-            self.trail_timer = 0.0
-            for _ in range(2):
-                particles.append(Particle(
-                    self.x + random.uniform(-self.radius, self.radius),
-                    self.y + random.uniform(-self.radius, self.radius),
-                    -self.dir * random.uniform(WIDTH * 0.02, WIDTH * 0.08),
-                    random.uniform(-HEIGHT * 0.05, HEIGHT * 0.05),
-                    self.color,
-                    random.uniform(0.2, 0.45),
-                    random.randint(2, 4),
-                ))
+        if self.at_center():
+            if self.next_dir != (0, 0) and self.can_move(self.next_dir):
+                self.dir = self.next_dir
+                self.next_dir = (0, 0)
 
-    def rect(self):
-        return pygame.Rect(
-            int(self.x - self.radius), int(self.y - self.radius),
-            self.radius * 2, self.radius * 2
-        )
+        self.step(dt)
 
-    def draw(self, surface):
-        # Внешнее свечение
-        glow_r = int(self.radius * 2.4)
-        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-        for i in range(6, 0, -1):
-            a = int(40 * (1 - i / 6))
-            pygame.draw.circle(glow, (*self.color, a),
-                               (glow_r, glow_r),
-                               int(glow_r * i / 6))
-        surface.blit(glow, (int(self.x - glow_r), int(self.y - glow_r)))
+        if self.dir != (0, 0):
+            self.mouth += self.mouth_dir * dt * 8
+            if self.mouth > 1:
+                self.mouth = 1
+                self.mouth_dir = -1
+            elif self.mouth < 0:
+                self.mouth = 0
+                self.mouth_dir = 1
 
-        # Ядро
-        pygame.draw.circle(surface, (255, 230, 150),
-                           (int(self.x), int(self.y)), int(self.radius * 1.3))
-        pygame.draw.circle(surface, self.color,
-                           (int(self.x), int(self.y)), self.radius)
-        pygame.draw.circle(surface, (255, 255, 255),
-                           (int(self.x), int(self.y)), max(2, self.radius // 2))
+    def draw(self, surface, time_ms):
+        if self.dir == (1, 0):
+            angle = 0
+        elif self.dir == (-1, 0):
+            angle = 180
+        elif self.dir == (0, -1):
+            angle = 90
+        elif self.dir == (0, 1):
+            angle = 270
+        else:
+            angle = 0
+
+        # Свечение под Pac-Man
+        pulse = 0.7 + 0.3 * math.sin(time_ms / 150)
+        draw_glow(surface, self.x, self.y, int(PAC_RADIUS * 1.6),
+                  PAC_GLOW, int(80 * pulse))
+
+        # Тень
+        shadow = pygame.Surface((PAC_RADIUS * 2, PAC_RADIUS), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 120), shadow.get_rect())
+        surface.blit(shadow, (self.x - PAC_RADIUS, self.y + PAC_RADIUS - 4))
+
+        open_angle = self.mouth * 35
+
+        points = [(self.x, self.y)]
+        steps = 24
+        start = math.radians(open_angle)
+        end = math.radians(360 - open_angle)
+        for i in range(steps + 1):
+            a = start + (end - start) * i / steps
+            points.append((
+                self.x + math.cos(a) * PAC_RADIUS,
+                self.y + math.sin(a) * PAC_RADIUS
+            ))
+
+        rad = math.radians(angle)
+        rotated = []
+        for px, py in points:
+            dx = px - self.x
+            dy = py - self.y
+            rx = dx * math.cos(rad) - dy * math.sin(rad)
+            ry = dx * math.sin(rad) + dy * math.cos(rad)
+            rotated.append((self.x + rx, self.y + ry))
+
+        pygame.draw.polygon(surface, PAC_COLOR, rotated)
+        # Блик
+        pygame.draw.circle(surface, (255, 255, 200),
+                           (int(self.x - PAC_RADIUS * 0.3),
+                            int(self.y - PAC_RADIUS * 0.4)),
+                           max(2, PAC_RADIUS // 5))
+
+
+class Ghost(Actor):
+    def __init__(self, col, row, color):
+        super().__init__(col, row, GHOST_SPEED)
+        self.color = color
+        self.frightened = False
+        self.eaten = False
+        self.start_dir_timer = random.uniform(0, 0.3)
+        self.wobble = random.uniform(0, 10)
+
+    def update(self, dt, pac, fright_timer):
+        if self.eaten:
+            self.speed = GHOST_SPEED * 1.6
+            target = (14, 14)
+        elif self.frightened:
+            self.speed = GHOST_FRIGHT_SPEED
+            target = None
+        else:
+            self.speed = GHOST_SPEED
+            target = (pac.col, pac.row)
+
+        if self.at_center():
+            options = []
+            for d in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                if not is_wall(self.col + d[0], self.row + d[1]):
+                    options.append(d)
+
+            opposite = (-self.dir[0], -self.dir[1])
+            if opposite in options and len(options) > 1:
+                options.remove(opposite)
+
+            if self.start_dir_timer > 0:
+                self.start_dir_timer -= dt
+                if self.dir == (0, 0) and options:
+                    self.dir = random.choice(options)
+            elif options:
+                if target is None:
+                    self.dir = random.choice(options)
+                else:
+                    best = options[0]
+                    best_dist = 10 ** 9
+                    for d in options:
+                        nc = self.col + d[0]
+                        nr = self.row + d[1]
+                        dist = (nc - target[0]) ** 2 + (nr - target[1]) ** 2
+                        if dist < best_dist:
+                            best_dist = dist
+                            best = d
+                    self.dir = best
+
+        self.step(dt)
+        self.wobble += dt * 6
+
+    def draw(self, surface, time_ms):
+        r = PAC_RADIUS
+        body_color = self.color
+
+        if self.eaten:
+            body_color = None
+        elif self.frightened:
+            body_color = GHOST_FRIGHT_FLASH if time_ms % 400 < 200 else GHOST_FRIGHT
+
+        # Свечение
+        if body_color:
+            draw_glow(surface, self.x, self.y, int(r * 1.4), body_color, 60)
+
+        # Тень
+        shadow = pygame.Surface((r * 2, r), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, 120), shadow.get_rect())
+        surface.blit(shadow, (self.x - r, self.y + r - 4))
+
+        # Покачивание
+        wob = math.sin(self.wobble) * 1.5
+
+        if body_color:
+            pygame.draw.circle(surface, body_color,
+                               (int(self.x), int(self.y - 2 + wob)), r)
+            rect = pygame.Rect(int(self.x - r), int(self.y - 2 + wob),
+                               r * 2, r + 4)
+            pygame.draw.rect(surface, body_color, rect)
+
+            wave_y = self.y + r + wob
+            wave_w = (r * 2) / 4
+            points = [(int(self.x - r), int(wave_y))]
+            for i in range(4):
+                x1 = int(self.x - r + i * wave_w + wave_w / 2)
+                x2 = int(self.x - r + (i + 1) * wave_w)
+                points.append((x1, int(wave_y + 5)))
+                points.append((x2, int(wave_y)))
+            points.append((int(self.x + r), int(wave_y)))
+            points.append((int(self.x + r), int(self.y - 2 + wob)))
+            points.append((int(self.x - r), int(self.y - 2 + wob)))
+            pygame.draw.polygon(surface, body_color, points)
+
+        # Глаза
+        eye_r = max(3, r // 3)
+        for ex in (-r // 3, r // 3):
+            pygame.draw.circle(surface, EYE_WHITE,
+                               (int(self.x + ex), int(self.y - 4 + wob)), eye_r)
+            pygame.draw.circle(surface, EYE_BLUE,
+                               (int(self.x + ex + self.dir[0] * 2),
+                                int(self.y - 4 + self.dir[1] * 2 + wob)),
+                               max(2, eye_r // 2))
+
+
+def draw_maze(surface, time_ms):
+    pulse = 0.6 + 0.4 * math.sin(time_ms / 700)
+    for r, row in enumerate(MAZE):
+        for c, ch in enumerate(row):
+            if ch == "#":
+                x = BOARD_X + c * CELL
+                y = BOARD_Y + r * CELL
+                rect = pygame.Rect(x + 2, y + 2, CELL - 4, CELL - 4)
+                # Свечение стены
+                draw_glow(surface, rect.centerx, rect.centery,
+                          int(CELL * 0.7), WALL_GLOW, int(30 * pulse))
+                pygame.draw.rect(surface, WALL_COLOR, rect, border_radius=5)
+                # Внутренняя обводка
+                pygame.draw.rect(surface, WALL_EDGE, rect, 1, border_radius=5)
+
+
+def draw_pellets(surface, pellets, powers, time_ms):
+    pulse = 0.6 + 0.4 * math.sin(time_ms / 200)
+    for c, r in pellets:
+        cx, cy = cell_center(c, r)
+        # Лёгкое свечение
+        draw_glow(surface, cx, cy, 10, PELLET_COLOR, 60)
+        pygame.draw.circle(surface, PELLET_COLOR, (int(cx), int(cy)), 4)
+    for c, r in powers:
+        cx, cy = cell_center(c, r)
+        rr = int(7 + 3 * pulse)
+        draw_glow(surface, cx, cy, rr * 3, POWER_COLOR, 120)
+        pygame.draw.circle(surface, POWER_COLOR, (int(cx), int(cy)), rr)
+        pygame.draw.circle(surface, (255, 255, 200),
+                           (int(cx), int(cy)), max(2, rr // 2))
+
+
+def draw_hud(surface, lives, fright_timer):
+    s = font_med.render(f"СЧЁТ: {score}", True, TEXT_COLOR)
+    surface.blit(s, (BOARD_X, BOARD_Y - 50))
+
+    b = font_med.render(f"РЕКОРД: {best}", True, GOLD)
+    surface.blit(b, (BOARD_X + BOARD_W - b.get_width(), BOARD_Y - 50))
+
+    for i in range(lives):
+        cx = BOARD_X + 20 + i * 40
+        cy = BOARD_Y + BOARD_H + 30
+        points = [(cx, cy)]
+        for j in range(20):
+            a = math.radians(35 + (360 - 70) * j / 19)
+            points.append((cx + math.cos(a) * 12, cy + math.sin(a) * 12))
+        pygame.draw.polygon(surface, PAC_COLOR, points)
+
+    if fright_timer > 0:
+        bar_w = 200
+        ratio = max(0, fright_timer / 7.0)
+        pygame.draw.rect(surface, (60, 60, 90),
+                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40,
+                          bar_w, 14), border_radius=7)
+        pygame.draw.rect(surface, GHOST_FRIGHT,
+                         (BOARD_X + BOARD_W // 2 - bar_w // 2, BOARD_Y - 40,
+                          int(bar_w * ratio), 14), border_radius=7)
 
 
 # ============================================================
-#                    HUD
+#           ВВОД: клавиатура + джойстик
 # ============================================================
-def draw_hud(surface, p1, p2, time_left):
-    margin = int(WIDTH * 0.03)
-    bar_w = int(WIDTH * 0.36)
-    bar_h = int(HEIGHT * 0.045)
-    bar_y = int(HEIGHT * 0.04)
+def read_direction(keys, joy):
+    """Возвращает направление от клавиатуры/джойстика или None."""
+    # --- Клавиатура ---
+    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        return (-1, 0)
+    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+        return (1, 0)
+    if keys[pygame.K_UP] or keys[pygame.K_w]:
+        return (0, -1)
+    if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+        return (0, 1)
 
-    p1.draw_health_bar(surface, margin, bar_y, bar_w, bar_h)
-    p2.draw_health_bar(surface, WIDTH - margin - bar_w, bar_y,
-                       bar_w, bar_h, align_right=True)
+    # --- Джойстик ---
+    if joy is None:
+        return None
 
-    # Тень под текстом имён
-    name1 = font_med.render("ИГРОК 1", True, P1_COLOR)
-    name2 = font_med.render("ИГРОК 2", True, P2_COLOR)
-    sh1 = font_med.render("ИГРОК 1", True, (0, 0, 0))
-    sh2 = font_med.render("ИГРОК 2", True, (0, 0, 0))
-    surface.blit(sh1, (margin + 2, bar_y + bar_h + 12))
-    surface.blit(sh2, (WIDTH - margin - name2.get_width() + 2, bar_y + bar_h + 12))
-    surface.blit(name1, (margin, bar_y + bar_h + 10))
-    surface.blit(name2, (WIDTH - margin - name2.get_width(), bar_y + bar_h + 10))
+    # Крестовина
+    if joy.get_numhats() > 0:
+        hx, hy = joy.get_hat(0)
+        if hx != 0 or hy != 0:
+            if abs(hx) >= abs(hy):
+                return (1, 0) if hx > 0 else (-1, 0)
+            else:
+                return (0, 1) if hy > 0 else (0, -1)
 
-    # Таймер
-    timer_col = GOLD if time_left > 10 else (255, 80, 80)
-    t_txt = font_big.render(str(int(time_left) + 1), True, timer_col)
-    t_sh = font_big.render(str(int(time_left) + 1), True, (0, 0, 0))
-    tx = WIDTH // 2 - t_txt.get_width() // 2
-    surface.blit(t_sh, (tx + 3, bar_y + 3))
-    surface.blit(t_txt, (tx, bar_y))
+    # Левый стик
+    if joy.get_numaxes() >= 2:
+        ax = joy.get_axis(0)
+        ay = joy.get_axis(1)
+        if abs(ax) > DEADZONE or abs(ay) > DEADZONE:
+            if abs(ax) >= abs(ay):
+                return (1, 0) if ax > 0 else (-1, 0)
+            else:
+                return (0, 1) if ay > 0 else (0, -1)
+    return None
 
-    # Рекорд
-    best_txt = font_small.render(f"РЕКОРД: {best}   СЧЁТ: {score}",
-                                 True, GOLD)
-    surface.blit(best_txt,
-                 (WIDTH // 2 - best_txt.get_width() // 2, bar_y + bar_h + 18))
+
+def button_pressed(joy, idx):
+    if joy is None or idx >= joy.get_numbuttons():
+        return False
+    return joy.get_button(idx)
 
 
 # ============================================================
-#                  ЭКРАН ПОБЕДЫ
+#                       ЭКРАНЫ
 # ============================================================
-def game_over_screen(winner):
-    save_score(score)
-    t = 0.0
+def pause_screen():
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen.blit(overlay, (0, 0))
+
+    title = font_big.render("ПАУЗА", True, GOLD)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 100))
+
+    hint1 = font_med.render("START / P — продолжить", True, TEXT_COLOR)
+    screen.blit(hint1, (WIDTH // 2 - hint1.get_width() // 2, HEIGHT // 2))
+
+    hint2 = font_small.render("ESC — выход", True, TEXT_DIM)
+    screen.blit(hint2, (WIDTH // 2 - hint2.get_width() // 2, HEIGHT // 2 + 70))
+
+    pygame.display.flip()
+
     while True:
-        dt = clock.tick(60) / 1000
-        t += dt
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                if event.key in (pygame.K_p, pygame.K_RETURN, pygame.K_SPACE):
+                    return
+            if event.type == pygame.JOYBUTTONDOWN:
+                if event.button == BTN_START or event.button == BTN_BACK:
+                    return
+                if event.button in (BTN_A, BTN_X):
+                    return
+        clock.tick(30)
 
+
+def game_over_screen(win):
+    save_score(score)
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 200))
+    screen.blit(overlay, (0, 0))
+
+    if win:
+        title = font_big.render("ПОБЕДА!", True, (120, 255, 140))
+    else:
+        title = font_big.render("ИГРА ОКОНЧЕНА", True, (255, 100, 100))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 150))
+
+    s = font_med.render(f"Счёт: {score}", True, TEXT_COLOR)
+    screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 - 40))
+
+    b = font_med.render(f"Рекорд: {best}", True, GOLD)
+    screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 10))
+
+    hint = font_small.render("A / R — заново    START / ESC — выход",
+                             True, TEXT_DIM)
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 80))
+
+    pygame.display.flip()
+
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -674,90 +640,41 @@ def game_over_screen(winner):
                 if event.key == pygame.K_r:
                     return True
             if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == BTN_START:
+                if event.button == BTN_START or event.button == BTN_BACK:
                     pygame.quit()
                     sys.exit()
-                if event.button == BTN_JUMP:
+                if event.button == BTN_A:
                     return True
 
-        # Затемнение
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 210))
-        screen.blit(overlay, (0, 0))
 
-        # Пульсирующий заголовок
-        pulse = 0.5 + 0.5 * math.sin(t * 3)
-        glow_r = int(HEIGHT * 0.2 + pulse * HEIGHT * 0.05)
-        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*GOLD, 60), (glow_r, glow_r), glow_r)
-        screen.blit(glow, (WIDTH // 2 - glow_r, HEIGHT // 2 - glow_r))
-
-        text = font_big.render(f"{winner} ПОБЕДИЛ!", True, GOLD)
-        sh = font_big.render(f"{winner} ПОБЕДИЛ!", True, (0, 0, 0))
-        tx = WIDTH // 2 - text.get_width() // 2
-        ty = HEIGHT // 2 - text.get_height() - 40
-        screen.blit(sh, (tx + 4, ty + 4))
-        screen.blit(text, (tx, ty))
-
-        s = font_med.render(f"СЧЁТ: {score}", True, TEXT_COLOR)
-        screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 + 20))
-
-        b = font_med.render(f"РЕКОРД: {best}", True, GOLD)
-        screen.blit(b, (WIDTH // 2 - b.get_width() // 2, HEIGHT // 2 + 80))
-
-        if int(t * 2) % 2 == 0:
-            hint = font_med.render("A / R — заново    START / ESC — выход",
-                                   True, (220, 220, 220))
-            screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2,
-                               HEIGHT // 2 + 170))
-
-        pygame.display.flip()
-
-
-# ============================================================
-#                     ГЛАВНЫЙ ЦИКЛ
-# ============================================================
 def main():
-    global score, best, screen_shake
+    global score, best
 
     init_joysticks()
-
-    # Наборы клавиш для каждого игрока (исправление бага!)
-    P1_KEYS = {
-        "left":  pygame.K_a,
-        "right": pygame.K_d,
-        "jump":  pygame.K_w,
-        "fire":  pygame.K_f,
-    }
-    P2_KEYS = {
-        "left":  pygame.K_LEFT,
-        "right": pygame.K_RIGHT,
-        "jump":  pygame.K_UP,
-        "fire":  pygame.K_RCTRL,
-    }
+    joy = joysticks[0] if joysticks else None
 
     while True:
+        pellets, powers = make_grid()
+        pac = Pac()
+        ghosts = [
+            Ghost(14, 14, GHOST_RED),
+            Ghost(13, 14, GHOST_PINK),
+            Ghost(15, 14, GHOST_CYAN),
+            Ghost(16, 14, GHOST_ORANGE),
+        ]
         score = 0
-
-        p1_joy = 0 if len(joysticks) >= 1 else None
-        p2_joy = 1 if len(joysticks) >= 2 else None
-
-        p1 = Fighter(WIDTH * 0.25, P1_COLOR, P1_DARK, facing=1,
-                     joy_index=p1_joy, keymap=P1_KEYS)
-        p2 = Fighter(WIDTH * 0.75, P2_COLOR, P2_DARK, facing=-1,
-                     joy_index=p2_joy, keymap=P2_KEYS)
-
-        fireballs = []
+        lives = 3
+        fright_timer = 0
+        respawn_timer = 0
         running = True
-        winner = None
-        time_left = float(ROUND_TIME)
+        win = False
 
-        p1_fire_prev = False
-        p2_fire_prev = False
+        particles.clear()
 
         while running:
             dt = clock.tick(60) / 1000
             dt = min(dt, 0.05)
+            time_ms = pygame.time.get_ticks()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -769,110 +686,122 @@ def main():
                         save_score(score)
                         pygame.quit()
                         sys.exit()
+                    if event.key in (pygame.K_p, pygame.K_RETURN):
+                        pause_screen()
+                if event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == BTN_START or event.button == BTN_BACK:
+                        pause_screen()
                 if event.type in (pygame.JOYDEVICEADDED,
                                   pygame.JOYDEVICEREMOVED):
                     init_joysticks()
+                    joy = joysticks[0] if joysticks else None
 
+            if respawn_timer > 0:
+                respawn_timer -= dt
+                screen.blit(BACKGROUND, (0, 0))
+                draw_maze(screen, time_ms)
+                draw_pellets(screen, pellets, powers, time_ms)
+                draw_hud(screen, lives, fright_timer)
+                msg = font_med.render("Готов?", True, TEXT_COLOR)
+                screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+                pygame.display.flip()
+                continue
+
+            # --- Ввод ---
             keys = pygame.key.get_pressed()
+            new_dir = read_direction(keys, joy)
+            if new_dir is not None:
+                pac.next_dir = new_dir
 
-            # --- Огонь ---
-            p1_fire = keys[P1_KEYS["fire"]] or p1.get_button(BTN_FIRE)
-            if p1_fire and not p1_fire_prev:
-                ox, oy = p1.fire_origin()
-                fireballs.append(Fireball(ox, oy, 1, FIRE_P1, p1))
-            p1_fire_prev = p1_fire
+            if fright_timer > 0:
+                fright_timer -= dt
+                if fright_timer <= 0:
+                    for g in ghosts:
+                        g.frightened = False
 
-            p2_fire = keys[P2_KEYS["fire"]] or p2.get_button(BTN_FIRE)
-            if p2_fire and not p2_fire_prev:
-                ox, oy = p2.fire_origin()
-                fireballs.append(Fireball(ox, oy, -1, FIRE_P2, p2))
-            p2_fire_prev = p2_fire
+            pac.update(dt)
 
-            # --- Движение ---
-            p1.move(keys, dt)
-            p2.move(keys, dt)
-            p1.apply_gravity(dt)
-            p2.apply_gravity(dt)
-            p1.update_rect()
-            p2.update_rect()
-            p1.update_visual(dt)
-            p2.update_visual(dt)
+            pc = (pac.col, pac.row)
+            if pc in pellets:
+                pellets.discard(pc)
+                score += 10
+                if score > best:
+                    best = score
+                cx, cy = cell_center(*pc)
+                spawn_particles(cx, cy, PELLET_COLOR, 6)
+            elif pc in powers:
+                powers.discard(pc)
+                score += 50
+                if score > best:
+                    best = score
+                cx, cy = cell_center(*pc)
+                spawn_particles(cx, cy, POWER_COLOR, 16)
+                fright_timer = 7.0
+                for g in ghosts:
+                    if not g.eaten:
+                        g.frightened = True
 
-            for fb in fireballs:
-                fb.update(dt)
+            for g in ghosts:
+                g.update(dt, pac, fright_timer)
 
-            # --- Попадания ---
-            for fb in fireballs:
-                if not fb.alive:
+                if g.eaten:
+                    gx, gy = cell_center(14, 14)
+                    if abs(g.x - gx) < CELL / 2 and abs(g.y - gy) < CELL / 2:
+                        g.eaten = False
+                        g.frightened = False
+                        g.col, g.row = 14, 14
+                        g.dir = (0, 0)
+                        g.start_dir_timer = 0.2
                     continue
-                for fighter in (p1, p2):
-                    if fighter is fb.owner:
-                        continue
-                    if fb.rect().colliderect(fighter.rect):
-                        fighter.take_damage(FIREBALL_DAMAGE)
-                        score += 5
+
+                dist = math.hypot(g.x - pac.x, g.y - pac.y)
+                if dist < CELL * 0.6:
+                    if g.frightened:
+                        g.eaten = True
+                        g.frightened = False
+                        score += 200
                         if score > best:
                             best = score
-                        fb.alive = False
-                        if fighter.health <= 0:
-                            winner = "ИГРОК 1" if fighter is p2 else "ИГРОК 2"
+                        spawn_particles(g.x, g.y, (150, 220, 255), 14)
+                    else:
+                        lives -= 1
+                        spawn_particles(pac.x, pac.y, PAC_COLOR, 20)
+                        if lives <= 0:
                             running = False
+                        else:
+                            pac = Pac()
+                            ghosts = [
+                                Ghost(14, 14, GHOST_RED),
+                                Ghost(13, 14, GHOST_PINK),
+                                Ghost(15, 14, GHOST_CYAN),
+                                Ghost(16, 14, GHOST_ORANGE),
+                            ]
+                            fright_timer = 0
+                            respawn_timer = 1.2
 
-            # --- Столкновения снарядов ---
-            for i in range(len(fireballs)):
-                for j in range(i + 1, len(fireballs)):
-                    a, b = fireballs[i], fireballs[j]
-                    if a.alive and b.alive and a.owner is not b.owner:
-                        if a.rect().colliderect(b.rect()):
-                            spawn_hit_effects(
-                                (a.x + b.x) / 2, (a.y + b.y) / 2,
-                                (255, 255, 200)
-                            )
-                            a.alive = False
-                            b.alive = False
-
-            fireballs = [fb for fb in fireballs if fb.alive]
-
-            # --- Таймер ---
-            time_left -= dt
-            if time_left <= 0:
-                # Побеждает тот, у кого больше здоровья
-                if p1.health > p2.health:
-                    winner = "ИГРОК 1"
-                elif p2.health > p1.health:
-                    winner = "ИГРОК 2"
-                else:
-                    winner = "НИЧЬЯ"
+            if not pellets and not powers:
+                win = True
                 running = False
 
-            # --- Частицы ---
-            particles[:] = [p for p in particles if p.update(dt)]
-            damage_texts[:] = [d for d in damage_texts if d.update(dt)]
+            # --- Отрисовка ---
+            screen.blit(BACKGROUND, (0, 0))
+            draw_maze(screen, time_ms)
+            draw_pellets(screen, pellets, powers, time_ms)
 
-            # --- Тряска ---
-            shake_x = shake_y = 0
-            if screen_shake > 0:
-                shake_x = random.randint(-int(screen_shake), int(screen_shake))
-                shake_y = random.randint(-int(screen_shake), int(screen_shake))
-                screen_shake *= 0.88
-                if screen_shake < 0.5:
-                    screen_shake = 0
-
-            # --- Рисование ---
-            screen.blit(BACKGROUND, (shake_x, shake_y))
-            p1.draw(screen)
-            p2.draw(screen)
-            for fb in fireballs:
-                fb.draw(screen)
             for p in particles:
                 p.draw(screen)
-            for d in damage_texts:
-                d.draw(screen)
-            draw_hud(screen, p1, p2, max(0, time_left))
+
+            for g in ghosts:
+                g.draw(screen, time_ms)
+
+            pac.draw(screen, time_ms)
+            draw_hud(screen, lives, fright_timer)
+
+            particles[:] = [p for p in particles if p.update(dt)]
 
             pygame.display.flip()
 
-        if not game_over_screen(winner):
+        if not game_over_screen(win):
             break
 
 
